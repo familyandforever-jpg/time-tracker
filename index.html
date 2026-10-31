@@ -152,10 +152,10 @@ textarea{min-height:240px;font-size:14px;resize:vertical}
 
 [hidden]{display:none!important}
 .topbar{display:flex;gap:8px;align-items:center;margin-bottom:14px}
-.tabs{flex:1;display:grid;grid-template-columns:repeat(3,1fr);background:var(--surface);border-radius:12px;padding:4px;gap:4px}
-.tabs button{border:0;background:none;padding:8px;border-radius:9px;cursor:pointer;font-weight:700;color:var(--muted);min-height:40px}
+.tabs{flex:1;display:grid;grid-template-columns:repeat(4,1fr);background:var(--surface);border-radius:12px;padding:4px;gap:4px}
+.tabs button{border:0;background:none;padding:8px 2px;white-space:nowrap;font-size:15px;border-radius:9px;cursor:pointer;font-weight:700;color:var(--muted);min-height:40px}
 .tabs button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
-.syncbtn{border:1px solid var(--line);background:var(--surface);border-radius:12px;min-height:48px;padding:0 12px;cursor:pointer;font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px;white-space:nowrap}
+.syncbtn{border:1px solid var(--line);background:var(--surface);border-radius:12px;min-height:48px;padding:0 10px;cursor:pointer;font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px;white-space:nowrap}
 .syncbtn i{width:8px;height:8px;border-radius:50%;background:var(--line);flex:none}
 .syncbtn.ok i{background:var(--good)}
 .syncbtn.err i{background:var(--danger)}
@@ -212,6 +212,27 @@ textarea{min-height:240px;font-size:14px;resize:vertical}
 .blocks i{width:10px;height:10px;border-radius:2px;background:var(--accent)}
 .tot > span:last-child{text-align:right;font-variant-numeric:tabular-nums}
 .node .link{min-width:44px;min-height:44px;font-size:20px}
+.brushes{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 6px;scrollbar-width:thin}
+.brush{flex:none;display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;background:var(--surface);padding:0 12px;min-height:40px;cursor:pointer;font-size:14px;white-space:nowrap}
+.brush .dot{width:10px;height:10px;border-radius:50%}
+.brush[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 2px var(--accent);font-weight:700}
+.hint{font-size:13px;color:var(--muted);margin:4px 0 10px}
+.tbgrid{background:var(--surface);border-radius:12px;padding:8px 10px 8px 0;user-select:none;-webkit-user-select:none}
+.tbgrid.painting{touch-action:none}
+.hr{display:grid;grid-template-columns:44px 1fr;align-items:center}
+.hr .lab{font-size:12px;color:var(--muted);text-align:right;padding-right:8px;font-variant-numeric:tabular-nums}
+.cells{display:grid;grid-template-columns:repeat(12,1fr);column-gap:2px}
+.cells .slot:nth-child(3n):not(:last-child){margin-right:3px}
+.slot{display:flex;flex-direction:column;gap:2px;padding:3px 0;border:0;background:none;cursor:pointer;min-width:0;-webkit-tap-highlight-color:transparent}
+.slot .p{display:block;height:20px;border-radius:3px}
+.slot .x{display:block;height:5px;border-radius:2px}
+.slot.now .p{outline:2px solid var(--ink);outline-offset:1px}
+.slot.pick .p{outline:2px dashed var(--ink);outline-offset:1px}
+.slot.miss .p{opacity:.45}
+.tb-now{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:12px 0 0}
+.tb-now .btn{min-height:40px;padding:6px 16px}
+.tag{font-size:13px;color:var(--good);font-weight:700;white-space:nowrap}
+#tbView header{margin-bottom:4px}
 .auth-err{color:var(--danger);font-size:14px;min-height:20px;margin:4px 0}
 code.inline{font-size:13px;background:var(--bg);padding:1px 5px;border-radius:4px}
 </style>
@@ -221,6 +242,7 @@ code.inline{font-size:13px;background:var(--bg);padding:1px 5px;border-radius:4p
   <div class="topbar">
     <div class="tabs" role="tablist">
       <button role="tab" id="tabDay" aria-selected="true" data-action="tab" data-id="day">记录</button>
+      <button role="tab" id="tabTb" aria-selected="false" data-action="tab" data-id="tb">时间块</button>
       <button role="tab" id="tabDash" aria-selected="false" data-action="tab" data-id="dash">看板</button>
       <button role="tab" id="tabLearn" aria-selected="false" data-action="tab" data-id="learn">学习</button>
     </div>
@@ -267,6 +289,7 @@ code.inline{font-size:13px;background:var(--bg);padding:1px 5px;border-radius:4p
   </div>
   <p class="foot"><button class="link" data-action="backup">备份 / 恢复数据</button></p>
   </div>
+  <div id="tbView" hidden></div>
   <div id="dashView" hidden></div>
   <div id="learnView" hidden></div>
 </div>
@@ -287,7 +310,7 @@ const ESTS = [5,10,15,20,30,45,60,90,120,150,180,240,300];
 
 function uid(){ return Math.random().toString(36).slice(2,8) + Date.now().toString(36); }
 function fresh(){
-  return { activities: DEFAULTS.map((d,i)=>({id:'d-'+d[0], name:d[0], rate:!!d[1], color:COLORS[i % COLORS.length], hidden:false})), entries: [], current: null, plans: {}, tomb: {}, curU: 0, nodes: [] };
+  return { activities: DEFAULTS.map((d,i)=>({id:'d-'+d[0], name:d[0], rate:!!d[1], color:COLORS[i % COLORS.length], hidden:false})), entries: [], current: null, plans: {}, tomb: {}, curU: 0, nodes: [], tb: [] };
 }
 function load(){
   try{
@@ -298,7 +321,7 @@ function load(){
 }
 let snap = {};
 function allItems(s){
-  const out = [...s.activities, ...s.entries, ...(s.nodes || [])];
+  const out = [...s.activities, ...s.entries, ...(s.nodes || []), ...(s.tb || [])];
   Object.values(s.plans || {}).forEach(l => out.push(...l));
   return out;
 }
@@ -336,6 +359,7 @@ let S = load();
 if(!S.plans) S.plans = {};
 if(!S.tomb) S.tomb = {};
 if(!S.nodes) S.nodes = [];
+if(!S.tb) S.tb = [];
 rebuildSnap();
 DEFAULTS.forEach(([name, rate]) => {
   if(!S.activities.some(a => a.name === name)){
@@ -375,6 +399,7 @@ function clip(it, d){ const e = addDays(d,1); return Math.max(0, Math.min(it.end
 function render(){
   if(tab === 'dash'){ renderDash(); return; }
   if(tab === 'learn'){ renderLearn(); return; }
+  if(tab === 'tb'){ renderTB(); return; }
   const today = sod(Date.now());
   const items = dayItems(view);
   const tracked = items.reduce((s,it) => s + clip(it, view), 0);
@@ -589,7 +614,7 @@ function doImport(){
   try{
     const o = JSON.parse($('#fImport').value);
     if(!o || !Array.isArray(o.activities) || !Array.isArray(o.entries)) throw 0;
-    S = merge(S, o); if(!S.nodes) S.nodes = []; dedupe(); save(); closeSheet(); view = sod(Date.now()); render(); toast('已合并导入');
+    S = merge(S, o); if(!S.nodes) S.nodes = []; if(!S.tb) S.tb = []; dedupe(); save(); closeSheet(); view = sod(Date.now()); render(); toast('已合并导入');
   }catch(e){ toast('内容不对，请粘贴完整的备份文字'); }
 }
 
@@ -717,11 +742,13 @@ function buildText(){
   items.forEach(it => { const c = clip(it, view); tot[it.act] = (tot[it.act]||0) + c; if(actById(it.act).rate){ all += c; if(it.focus >= 4) high += c; } });
   lines.push('', '合计：');
   Object.entries(tot).sort((x,y) => y[1]-x[1]).forEach(([id,ms]) => lines.push(`${actById(id).name} ${durTxt(ms)}`));
-  lines.push(`学习和工作 ${durTxt(all)}，高专注 ${durTxt(high)}`, '', '今天最卡的地方：', '明天想完成的事：');
+  lines.push(`学习和工作 ${durTxt(all)}，高专注 ${durTxt(high)}`);
+  lines.push(...tbText(view));
+  lines.push('', '今天最卡的地方：', '明天想完成的事：');
   return lines.join('\n');
 }
 async function copyText(){
-  if(!dayItems(view).length && !(S.plans[isoDate(view)]||[]).length){ toast('这一天还没有记录'); return; }
+  if(!dayItems(view).length && !(S.plans[isoDate(view)]||[]).length && !tbItem(isoDate(view), false)){ toast('这一天还没有记录'); return; }
   const t = buildText();
   try{
     if(!navigator.clipboard) throw new Error('no clipboard');
@@ -778,6 +805,11 @@ document.addEventListener('click', e => {
     case 'hcol': hSel = hSel === Number(id) ? null : Number(id); renderDash(); break;
     case 'copyPeriod': copyPeriod(); break;
     case 'account': openAccount(); break;
+    case 'brush': brush = id === '__view' ? null : id; tbPick = null; renderTB(); break;
+    case 'tbEarly': showEarly = !showEarly; try{ localStorage.setItem('tt-early', showEarly ? '1' : '0'); }catch(e){} renderTB(); break;
+    case 'tbCopyYday': tbCopyYday(); break;
+    case 'tbClear': tbClear(); break;
+    case 'tbDoClear': { const k = isoDate(view); S.tb = S.tb.filter(x => x.date !== k); save(); closeSheet(); renderTB(); break; }
     case 'sprint': sprintStart(); break;
     case 'sprintStop': if(S.current){ S.current.sprint = null; save(); render(); } break;
     case 'sprintAgain': closeSheet(); sprintStart(); break;
@@ -794,6 +826,11 @@ document.addEventListener('click', e => {
     case 'syncNow': closeSheet(); syncNow(); break;
   }
 });
+document.addEventListener('click', e => {
+  if(tab !== 'tb' || brush !== null) return;
+  const b = e.target.closest('[data-slot]'); if(!b) return;
+  const i = +b.dataset.slot; tbPick = tbPick === i ? null : i; renderTB();
+});
 document.addEventListener('keydown', e => { if(e.key === 'Escape' && $('#ov').classList.contains('open')) closeSheet(); });
 
 /* ============ 看板 ============ */
@@ -801,13 +838,11 @@ let tab = 'day', rangeN = 7, dSel = null, hSel = null;
 
 function setTab(t){
   tab = t;
-  $('#dayView').hidden = t !== 'day';
-  $('#dashView').hidden = t !== 'dash';
-  $('#tabDay').setAttribute('aria-selected', String(t === 'day'));
-  $('#tabDash').setAttribute('aria-selected', String(t === 'dash'));
-  $('#learnView').hidden = t !== 'learn';
-  $('#tabLearn').setAttribute('aria-selected', String(t === 'learn'));
-  if(t === 'day') view = sod(Date.now());
+  [['day','#dayView','#tabDay'],['tb','#tbView','#tabTb'],['dash','#dashView','#tabDash'],['learn','#learnView','#tabLearn']].forEach(([k, v, b]) => {
+    $(v).hidden = t !== k; $(b).setAttribute('aria-selected', String(t === k));
+  });
+  if(t === 'day' || t === 'tb') view = sod(Date.now());
+  tbPick = null;
   render();
   window.scrollTo(0, 0);
 }
@@ -1034,6 +1069,7 @@ function merge(a, b){
     activities: list(a.activities, b.activities),
     entries: list(a.entries, b.entries),
     nodes: list(a.nodes, b.nodes),
+    tb: list(a.tb, b.tb),
     plans, tomb,
     current: bNewer ? (b.current || null) : (a.current || null),
     curU: Math.max(a.curU || 0, b.curU || 0)
@@ -1055,6 +1091,7 @@ function dedupe(){
   Object.values(S.plans).forEach(l => l.forEach(p => { if(remap[p.act]) p.act = remap[p.act]; }));
   if(S.current && remap[S.current.act]) S.current.act = remap[S.current.act];
   S.nodes.forEach(n => { if(remap[n.course]) n.course = remap[n.course]; });
+  S.tb.forEach(t => Object.keys(t.slots).forEach(k => { if(remap[t.slots[k]]) t.slots[k] = remap[t.slots[k]]; }));
 }
 function stable(v){
   if(Array.isArray(v)) return '[' + v.map(stable).join(',') + ']';
@@ -1084,6 +1121,7 @@ async function syncNow(){
     const remote = data ? data.data : null;
     if(remote){
       S = merge(S, remote);
+      if(!S.nodes) S.nodes = []; if(!S.tb) S.tb = [];
       rebuildSnap();
       dedupe();
     }
@@ -1213,6 +1251,178 @@ function blockStats(endDay, n){
   if(S.current && S.current.blocks && S.current.start >= s) runs.push(S.current.blocks);
   if(!runs.length) return null;
   return {avg: runs.reduce((a, b) => a + b, 0) / runs.length, max: Math.max(...runs), total: runs.reduce((a, b) => a + b, 0), count: runs.length};
+}
+
+/* ============ 5 分钟时间块 ============ */
+const SLOT = 5 * 60000;
+let brush = null;          // null = 只看；'' = 橡皮；活动 id = 画笔
+let painting = null;       // {mode:'paint'|'erase'}
+let tbPick = null;         // 点选查看的格子
+let showEarly = false;
+try{ showEarly = localStorage.getItem('tt-early') === '1'; }catch(e){}
+
+function tbItem(date, create){
+  let it = S.tb.find(x => x.date === date);
+  if(!it && create){ it = {id:'tb-' + date, date, slots:{}}; S.tb.push(it); }
+  return it;
+}
+function slotTime(d, i){ const t = new Date(d); t.setHours(0, i * 5, 0, 0); return t.getTime(); }
+function slotLabel(d, i){ return `${hm(slotTime(d, i))}–${hm(slotTime(d, i + 1))}`; }
+function actualSlots(d){
+  const items = dayItems(d), out = new Array(288).fill(null);
+  for(let i = 0; i < 288; i++){
+    const mid = slotTime(d, i) + SLOT / 2;
+    const it = items.find(x => x.start <= mid && x.end > mid);
+    if(it) out[i] = it.act;
+  }
+  return out;
+}
+function runs(slots){
+  const out = [];
+  let cur = null;
+  for(let i = 0; i < 288; i++){
+    const a = slots[i] || null;
+    if(cur && cur.act === a) cur.to = i;
+    else { if(cur && cur.act) out.push(cur); cur = {act:a, from:i, to:i}; }
+  }
+  if(cur && cur.act) out.push(cur);
+  return out;
+}
+function adherence(d, plan, actual){
+  const nowIdx = d === sod(Date.now()) ? Math.floor((Date.now() - d) / SLOT) : 288;
+  let total = 0, hit = 0;
+  Object.entries(plan).forEach(([k, a]) => { const i = +k; if(i < nowIdx){ total++; if(actual[i] === a) hit++; } });
+  return {total, hit};
+}
+
+function renderTB(){
+  if(painting) return;
+  const today = sod(Date.now()), isToday = view === today;
+  const el = $('#tbView');
+  const it = tbItem(isoDate(view), false);
+  const plan = it ? it.slots : {};
+  const actual = actualSlots(view);
+  const nowIdx = isToday ? Math.floor((Date.now() - view) / SLOT) : -1;
+
+  // 显示哪些小时
+  let first = 6;
+  if(showEarly) first = 0;
+  else {
+    for(let i = 0; i < 72; i++) if(plan[i] || actual[i]){ first = Math.floor(i / 12); break; }
+  }
+
+  const head = `<header>
+    <button class="datebtn" data-action="prev" aria-label="前一天">‹</button>
+    <div class="dtitle"><h1>${dateTxt(view)}</h1><p>每格 5 分钟</p></div>
+    <button class="datebtn" data-action="next" aria-label="后一天"${isToday ? ' disabled' : ''}>›</button></header>`;
+
+  // 摘要
+  let now = '';
+  if(isToday){
+    const a = plan[nowIdx];
+    if(a){
+      let end = nowIdx; while(plan[end + 1] === a) end++;
+      const running = S.current && S.current.act === a;
+      now = `<div class="summary tb-now"><span>现在计划做 <b>${esc(actById(a).name)}</b>，到 ${hm(slotTime(view, end + 1))}</span>
+        ${running ? '<span class="tag">正在做</span>' : `<button class="btn primary" data-action="act" data-id="${a}">开始</button>`}</div>`;
+    }else{
+      let nx = nowIdx + 1; while(nx < 288 && !plan[nx]) nx++;
+      now = `<div class="summary tb-now"><span>${nx < 288 ? `下一块：<b>${hm(slotTime(view, nx))}</b> ${esc(actById(plan[nx]).name)}` : '现在这块没有安排。选一个画笔，在下面的格子上排一排。'}</span></div>`;
+    }
+  }
+  const ad = adherence(view, plan, actual);
+  const adTxt = ad.total ? `<div class="summary">已经过去的计划块里，<b>${ad.hit}/${ad.total}</b> 块按计划做了（${Math.round(ad.hit / ad.total * 100)}%）</div>` : '';
+
+  // 画笔
+  const acts = S.activities.filter(a => !a.hidden);
+  const brushes = `<div class="brushes" role="group" aria-label="画笔">
+    <button class="brush" data-action="brush" data-id="__view" aria-pressed="${brush === null}">只看</button>
+    ${acts.map(a => `<button class="brush" data-action="brush" data-id="${a.id}" aria-pressed="${brush === a.id}"><span class="dot" style="background:${a.color}"></span>${esc(a.name)}</button>`).join('')}
+    <button class="brush" data-action="brush" data-id="" aria-pressed="${brush === ''}">橡皮</button></div>
+    <p class="hint">${brush === null ? '点格子看详情。要排计划，先在上面选一个活动当画笔。' : brush === '' ? '在格子上点或滑动，擦掉计划。' : `在格子上点或滑动，排上「${esc(actById(brush).name)}」。点已经是这个颜色的格子会擦掉。`}</p>`;
+
+  // 网格
+  let rows = '';
+  for(let h = first; h < 24; h++){
+    let cells = '';
+    for(let m = 0; m < 12; m++){
+      const i = h * 12 + m, p = plan[i], x = actual[i];
+      const past = isToday ? i < nowIdx : view < today;
+      const miss = p && past && x !== p;
+      cells += `<button class="slot${i === nowIdx ? ' now' : ''}${tbPick === i ? ' pick' : ''}${miss ? ' miss' : ''}" data-slot="${i}" aria-label="${slotLabel(view, i)} 计划 ${p ? esc(actById(p).name) : '无'}，实际 ${x ? esc(actById(x).name) : '无'}">
+        <i class="p" style="background:${p ? actById(p).color : 'var(--bg)'}"></i><i class="x" style="background:${x ? actById(x).color : 'transparent'}"></i></button>`;
+    }
+    rows += `<div class="hr"><span class="lab">${h}:00</span><div class="cells">${cells}</div></div>`;
+  }
+  let pick = '';
+  if(tbPick != null && brush === null){
+    const p = plan[tbPick], x = actual[tbPick];
+    pick = `<div class="readout"><b>${slotLabel(view, tbPick)}</b>　计划：${p ? esc(actById(p).name) : '无'}　实际：${x ? esc(actById(x).name) : '没记录'}</div>`;
+  }
+
+  el.innerHTML = head + now + adTxt +
+    `<section><h2>排计划 <small>粗条 = 计划，细条 = 实际</small></h2>${brushes}</section>
+     <div class="tbgrid${brush !== null ? ' painting' : ''}" id="tbGrid">${rows}</div>${pick}
+     <div class="actions">
+       <button class="btn" data-action="tbEarly">${showEarly ? '隐藏 0–6 点' : '显示 0–6 点'}</button>
+       <button class="btn" data-action="tbCopyYday">照搬昨天的安排</button>
+     </div>
+     ${Object.keys(plan).length ? '<p class="foot"><button class="link" data-action="tbClear">清空这天的时间块</button></p>' : ''}`;
+}
+
+function paintAt(target){
+  const b = target && target.closest && target.closest('[data-slot]');
+  if(!b) return;
+  const i = +b.dataset.slot;
+  const it = tbItem(isoDate(view), true);
+  if(painting.mode === 'erase') delete it.slots[i];
+  else it.slots[i] = brush;
+  const p = it.slots[i];
+  b.querySelector('.p').style.background = p ? actById(p).color : 'var(--bg)';
+}
+document.addEventListener('pointerdown', e => {
+  if(tab !== 'tb' || brush === null) return;
+  const b = e.target.closest('[data-slot]'); if(!b) return;
+  e.preventDefault();
+  const it = tbItem(isoDate(view), true);
+  const cur = it.slots[+b.dataset.slot];
+  painting = {mode: brush === '' || cur === brush ? 'erase' : 'paint'};
+  paintAt(b);
+});
+document.addEventListener('pointermove', e => {
+  if(!painting) return;
+  paintAt(document.elementFromPoint(e.clientX, e.clientY));
+});
+function endPaint(){
+  if(!painting) return;
+  painting = null;
+  const it = tbItem(isoDate(view), false);
+  if(it && !Object.keys(it.slots).length) S.tb = S.tb.filter(x => x !== it);
+  save(); renderTB();
+}
+document.addEventListener('pointerup', endPaint);
+document.addEventListener('pointercancel', endPaint);
+
+function tbCopyYday(){
+  const y = tbItem(isoDate(addDays(view, -1)), false);
+  if(!y || !Object.keys(y.slots).length){ toast('前一天没有时间块'); return; }
+  const it = tbItem(isoDate(view), true);
+  it.slots = {...y.slots};
+  save(); renderTB(); toast('已照搬前一天的安排，可以再改');
+}
+function tbClear(){
+  editing = {mode:'tbClear'};
+  openSheet(`<h3>清空这天的时间块？</h3><p class="sub">只清掉计划格子，计时记录不受影响。</p>
+    <div class="row"><button class="btn" data-action="close">取消</button><button class="btn danger" data-action="tbDoClear">清空</button></div>`);
+}
+function tbText(d){
+  const it = tbItem(isoDate(d), false);
+  if(!it) return [];
+  const actual = actualSlots(d), ad = adherence(d, it.slots, actual);
+  const L = ['', '5 分钟时间块（计划）：'];
+  runs(it.slots).forEach(r => L.push(`${hm(slotTime(d, r.from))}-${hm(slotTime(d, r.to + 1))} ${actById(r.act).name}（${r.to - r.from + 1}块）`));
+  if(ad.total) L.push(`按计划完成 ${ad.hit}/${ad.total} 块`);
+  return L;
 }
 
 /* ============ 学习：知识树 ============ */
