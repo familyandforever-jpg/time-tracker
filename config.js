@@ -1,6 +1,5 @@
-// 云同步设置：把 Supabase 的 Project URL 和 anon public key 粘贴到下面两行的引号里。
-// 留空的话，App 照样能用，只是记录只存在当前设备上。
+// 云同步设置（已填好）。anon key 是公开用的 key，放在网页里是安全的。
 window.TT_CONFIG = {
-  supabaseUrl: '',
-  supabaseKey: ''
+  supabaseUrl: 'https://pwnkilkqbdtxodculcii.supabase.co',
+  supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3bmtpbGtxYmR0eG9kY3VsY2lpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzOTI1NDcsImV4cCI6MjEwODk2ODU0N30.-7X9EZS-5pelp1kw0cZpweP8l5KWknNIOssTsPVBej8'
 };
