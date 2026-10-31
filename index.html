@@ -1,0 +1,1326 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>每日时间记录</title>
+<meta name="theme-color" content="#2450B8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="时间记录">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#E8EDF1;--surface:#FFFFFF;--ink:#16202B;--muted:#5A6977;--line:#CFD8E0;
+  --accent:#2450B8;--accent-ink:#FFFFFF;--danger:#B42335;--good:#1D7A4B;
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F161D;--surface:#17212B;--ink:#E4EBF2;--muted:#94A4B4;--line:#2A3846;
+    --accent:#86A8F5;--accent-ink:#0F161D;--danger:#F2788A;--good:#6CCB98;color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F161D;--surface:#17212B;--ink:#E4EBF2;--muted:#94A4B4;--line:#2A3846;
+  --accent:#86A8F5;--accent-ink:#0F161D;--danger:#F2788A;--good:#6CCB98;color-scheme:dark;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Noto Sans SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  font-size:16px;line-height:1.5;-webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.wrap{max-width:560px;margin:0 auto;padding:16px 16px 48px}
+
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px}
+.datebtn{background:var(--surface);border:1px solid var(--line);border-radius:10px;width:44px;height:44px;font-size:20px;cursor:pointer}
+.datebtn:disabled{opacity:.35;cursor:default}
+.dtitle{text-align:center}
+.dtitle h1{font-size:20px;margin:0;font-weight:700}
+.dtitle p{margin:0;font-size:13px;color:var(--muted)}
+
+.now{background:var(--surface);border-radius:14px;padding:16px 18px;border-left:8px solid var(--nowc,var(--line))}
+.now .label{font-size:14px;color:var(--muted)}
+.now .act{font-size:20px;font-weight:700;overflow-wrap:anywhere}
+.timer{font-family:"Barlow Condensed","Roboto Condensed","Arial Narrow",sans-serif;font-weight:600;
+  font-size:clamp(60px,19vw,92px);line-height:1;font-variant-numeric:tabular-nums;margin:8px 0 10px}
+.timer.idle{color:var(--line)}
+.now .row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.now .since{font-size:14px;color:var(--muted)}
+.now .btns{display:flex;gap:8px}
+
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 14px;cursor:pointer;min-height:44px}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.danger{color:var(--danger);border-color:var(--danger)}
+.link{background:none;border:0;color:var(--accent);cursor:pointer;padding:6px;font-size:14px}
+
+section{margin-top:24px}
+h2{font-size:15px;font-weight:700;margin:0 0 8px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+h2 small{font-weight:400;color:var(--muted);font-size:13px}
+
+.strip{position:relative;height:32px;background:var(--surface);border-radius:6px;overflow:hidden}
+.seg{position:absolute;top:0;bottom:0}
+.seg.live{opacity:.55}
+.nowline{position:absolute;top:0;bottom:0;width:2px;background:var(--ink)}
+.ticks{position:relative;height:18px;font-size:11px;color:var(--muted);margin-top:2px}
+.ticks span{position:absolute;transform:translateX(-50%)}
+.ticks span:first-child{transform:none}
+.ticks span:last-child{transform:translateX(-100%)}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+.act-btn{display:flex;align-items:center;gap:6px;padding:10px 8px;font-size:15px;border-radius:10px;border:1px solid var(--line);
+  background:var(--surface);cursor:pointer;text-align:left;min-height:52px;position:relative;overflow-wrap:break-word;min-width:0}
+.act-btn .dot{width:12px;height:12px;border-radius:50%;flex:none}
+.act-btn.on{box-shadow:inset 0 0 0 2px var(--c)}
+.act-btn.add{color:var(--accent);justify-content:center;border-style:dashed}
+.editing .act-btn:not(.add){border-color:var(--danger)}
+.editing .act-btn:not(.add)::after{content:"×";position:absolute;top:2px;right:8px;color:var(--danger);font-size:16px}
+
+.list{list-style:none;margin:0;padding:0;background:var(--surface);border-radius:12px;overflow:hidden}
+.entry{width:100%;background:none;border:0;border-bottom:1px solid var(--line);display:grid;
+  grid-template-columns:104px 1fr auto;gap:8px;padding:11px 14px;text-align:left;cursor:pointer;align-items:center}
+.list li:last-child .entry{border-bottom:0}
+.entry .t{font-variant-numeric:tabular-nums;color:var(--muted);font-size:14px}
+.entry .n{display:flex;align-items:center;gap:8px;min-width:0}
+.entry .n .dot{width:10px;height:10px;border-radius:50%;flex:none}
+.entry .d{font-size:14px;text-align:right;white-space:nowrap}
+.entry .f{display:block;font-size:12px;color:var(--muted)}
+.entry .note{display:block;font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.entry .n .nm{min-width:0}
+.now .note{font-size:15px;color:var(--muted);overflow-wrap:anywhere}
+.empty{padding:16px;color:var(--muted);font-size:14px}
+.plan{list-style:none;margin:0;padding:0;background:var(--surface);border-radius:12px;overflow:hidden}
+.plan li{display:grid;grid-template-columns:auto 1fr;align-items:center;border-bottom:1px solid var(--line)}
+.plan li:last-child{border-bottom:0}
+.tick{width:44px;height:44px;margin:4px 0 4px 8px;border-radius:10px;border:2px solid var(--line);background:var(--bg);cursor:pointer;font-size:18px;font-weight:700;color:var(--accent-ink)}
+.tick.done{background:var(--accent);border-color:var(--accent)}
+.pbody{background:none;border:0;text-align:left;cursor:pointer;padding:10px 14px;min-width:0}
+.pbody .pt{display:block;overflow-wrap:anywhere}
+.pbody .pt.done{color:var(--muted);text-decoration:line-through}
+.pbody .pm{display:block;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.pbody .over{color:var(--danger)}
+.reasons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:16px 0 12px}
+.reasons button{padding:12px 8px;border-radius:10px;border:1px solid var(--line);background:var(--bg);cursor:pointer}
+.foot{text-align:center;margin-top:16px}
+.sheet hr{border:0;border-top:1px solid var(--line);margin:18px 0}
+textarea.small{min-height:120px}
+
+.tot{display:grid;grid-template-columns:6em 1fr 5.6em;gap:10px;align-items:center;font-size:14px;margin:6px 0}
+.tot .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar{height:10px;border-radius:5px;background:var(--surface);overflow:hidden}
+.bar i{display:block;height:100%}
+.summary{background:var(--surface);border-radius:12px;padding:12px 14px;font-size:14px;margin-top:10px}
+.summary b{font-variant-numeric:tabular-nums}
+
+.actions{display:flex;gap:8px;margin-top:24px}
+.actions .btn{flex:1;padding:13px}
+
+.overlay{position:fixed;inset:0;background:rgba(10,16,22,.45);display:none;align-items:flex-end;justify-content:center;z-index:10}
+.overlay.open{display:flex}
+.sheet{background:var(--surface);width:100%;max-width:560px;border-radius:16px 16px 0 0;
+  padding:20px 18px calc(20px + env(safe-area-inset-bottom,0px));max-height:90%;overflow:auto}
+.sheet h3{margin:0 0 4px;font-size:18px}
+.sheet .sub{margin:0;color:var(--muted);font-size:14px}
+.rate{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:16px 0 12px}
+.rate button{padding:12px 0;border-radius:10px;border:1px solid var(--line);background:var(--bg);cursor:pointer;line-height:1.2}
+.rate b{display:block;font-size:22px}
+.rate span{font-size:12px;color:var(--muted)}
+.field{display:flex;flex-direction:column;gap:4px;margin:12px 0;font-size:14px;color:var(--muted)}
+.field input,.field select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;width:100%}
+.check{display:flex;gap:8px;align-items:center;font-size:14px;margin:12px 0}
+.check input{width:20px;height:20px}
+.sheet .row{display:flex;gap:8px;margin-top:16px}
+.sheet .row .btn{flex:1}
+textarea{min-height:240px;font-size:14px;resize:vertical}
+
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);
+  background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:14px;opacity:0;pointer-events:none;
+  transition:opacity .2s;z-index:20;max-width:90%;text-align:center}
+.toast.show{opacity:1}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+
+[hidden]{display:none!important}
+.topbar{display:flex;gap:8px;align-items:center;margin-bottom:14px}
+.tabs{flex:1;display:grid;grid-template-columns:repeat(3,1fr);background:var(--surface);border-radius:12px;padding:4px;gap:4px}
+.tabs button{border:0;background:none;padding:8px;border-radius:9px;cursor:pointer;font-weight:700;color:var(--muted);min-height:40px}
+.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
+.syncbtn{border:1px solid var(--line);background:var(--surface);border-radius:12px;min-height:48px;padding:0 12px;cursor:pointer;font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px;white-space:nowrap}
+.syncbtn i{width:8px;height:8px;border-radius:50%;background:var(--line);flex:none}
+.syncbtn.ok i{background:var(--good)}
+.syncbtn.err i{background:var(--danger)}
+.syncbtn.busy i{background:var(--accent)}
+
+.range{display:flex;gap:6px;margin-bottom:14px}
+.range button{flex:1;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:8px 0;cursor:pointer;font-size:14px;min-height:40px}
+.range button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);font-weight:700;box-shadow:inset 0 0 0 1px var(--accent)}
+.hero{background:var(--surface);border-radius:14px;padding:16px 18px}
+.hero .label{font-size:14px;color:var(--muted)}
+.hero .big{font-family:"Barlow Condensed","Roboto Condensed","Arial Narrow",sans-serif;font-weight:600;font-size:clamp(56px,16vw,76px);line-height:1;font-variant-numeric:tabular-nums;margin:6px 0 4px}
+.hero .big small{font-family:"Noto Sans SC",system-ui,sans-serif;font-size:16px;font-weight:400;color:var(--muted);margin-left:6px}
+.hero .meta{font-size:14px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap}
+.delta.up{color:var(--good)} .delta.down{color:var(--danger)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.stat{background:var(--surface);border-radius:12px;padding:10px 12px;min-width:0}
+.stat b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--muted)}
+.chart{background:var(--surface);border-radius:12px;padding:12px 12px 10px}
+.plot{position:relative;height:150px;margin-left:30px}
+.gl{position:absolute;left:0;right:0;border-top:1px dashed var(--line)}
+.gl span{position:absolute;right:calc(100% + 6px);top:-9px;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.cols{position:absolute;inset:0;display:flex;align-items:flex-end;gap:3px;border-bottom:1px solid var(--muted)}
+.col{flex:1;height:100%;display:flex;flex-direction:column-reverse;gap:2px;background:none;border:0;padding:0;cursor:pointer;min-width:0}
+.col i{display:block;width:100%;flex:none}
+.col i:last-child{border-radius:4px 4px 0 0}
+.cols.has-sel .col:not(.sel) i{opacity:.4}
+.xl{display:flex;gap:3px;margin-left:30px;margin-top:4px;font-size:11px;color:var(--muted)}
+.xl span{flex:1;text-align:center;min-width:0;overflow:hidden;white-space:nowrap;font-variant-numeric:tabular-nums}
+.readout{font-size:14px;margin-top:8px;min-height:21px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:8px;align-items:center}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.ramp{display:inline-flex;gap:2px;margin:0 4px;vertical-align:-1px}
+.ramp i{margin:0}
+.insights{list-style:none;margin:0;padding:0;background:var(--surface);border-radius:12px;overflow:hidden}
+.insights li{padding:11px 14px;border-bottom:1px solid var(--line);font-size:14px}
+.insights li:last-child{border-bottom:0}
+.reason{display:grid;grid-template-columns:8.5em 1fr auto;gap:10px;align-items:center;font-size:14px;margin:6px 0}
+.reason .bar i{background:var(--muted)}
+.tree{list-style:none;margin:0;padding:0;background:var(--surface);border-radius:12px;overflow:hidden}
+.tree ul,.tree li{list-style:none;margin:0;padding:0}
+.tree li > ul{margin:0}
+.node{display:flex;align-items:center;gap:8px;padding:6px 8px 6px 12px;border-bottom:1px solid var(--line);min-width:0}
+.mpill{flex:none;border:1px solid var(--line);border-radius:999px;font-size:12px;padding:0 10px;min-height:32px;min-width:5.4em;cursor:pointer;background:var(--bg);color:var(--muted)}
+.mpill.m1{background:color-mix(in srgb, var(--accent) 22%, var(--surface));color:var(--ink);border-color:transparent}
+.mpill.m2{background:color-mix(in srgb, var(--accent) 55%, var(--surface));color:var(--ink);border-color:transparent}
+.mpill.m3{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.ntext{flex:1;min-width:0;background:none;border:0;text-align:left;cursor:pointer;padding:8px 0;overflow-wrap:anywhere;font-size:15px}
+.ntext.trunk{font-weight:700}
+.sprint{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.sprint .sp-t{font-size:15px}
+.sprint .sp-t b{font-family:"Barlow Condensed","Roboto Condensed","Arial Narrow",sans-serif;font-size:24px;font-variant-numeric:tabular-nums;margin-right:4px}
+.blocks{display:inline-flex;gap:3px;vertical-align:middle;margin-left:6px;flex-wrap:wrap}
+.blocks i{width:10px;height:10px;border-radius:2px;background:var(--accent)}
+.tot > span:last-child{text-align:right;font-variant-numeric:tabular-nums}
+.node .link{min-width:44px;min-height:44px;font-size:20px}
+.auth-err{color:var(--danger);font-size:14px;min-height:20px;margin:4px 0}
+code.inline{font-size:13px;background:var(--bg);padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tabDay" aria-selected="true" data-action="tab" data-id="day">记录</button>
+      <button role="tab" id="tabDash" aria-selected="false" data-action="tab" data-id="dash">看板</button>
+      <button role="tab" id="tabLearn" aria-selected="false" data-action="tab" data-id="learn">学习</button>
+    </div>
+    <button class="syncbtn" id="syncBtn" data-action="account"><i></i><span id="syncTxt">仅本机</span></button>
+  </div>
+  <div id="dayView">
+  <header>
+    <button class="datebtn" data-action="prev" aria-label="前一天">‹</button>
+    <div class="dtitle"><h1 id="dTitle"></h1><p id="dSub"></p></div>
+    <button class="datebtn" data-action="next" aria-label="后一天" id="nextBtn">›</button>
+  </header>
+
+  <div class="now" id="now"></div>
+
+  <section>
+    <h2>时间带 <small>0 点到 24 点</small></h2>
+    <div class="strip" id="strip"></div>
+    <div class="ticks"><span style="left:0">0</span><span style="left:25%">6</span><span style="left:50%">12</span><span style="left:75%">18</span><span style="left:100%">24</span></div>
+  </section>
+
+  <section>
+    <h2><span id="planTitle">今日计划</span> <button class="link" data-action="addPlan">＋ 加一项</button></h2>
+    <div id="plan"></div>
+  </section>
+
+  <section>
+    <h2><span id="gridTitle">点一下开始计时</span> <button class="link" data-action="toggleEdit" id="editBtn">整理</button></h2>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section>
+    <h2>记录 <small>点一条可以修改</small></h2>
+    <ul class="list" id="list"></ul>
+  </section>
+
+  <section>
+    <h2>合计</h2>
+    <div id="totals"></div>
+  </section>
+
+  <div class="actions">
+    <button class="btn" data-action="addEntry">补记一条</button>
+    <button class="btn primary" data-action="copy">复制当天记录</button>
+  </div>
+  <p class="foot"><button class="link" data-action="backup">备份 / 恢复数据</button></p>
+  </div>
+  <div id="dashView" hidden></div>
+  <div id="learnView" hidden></div>
+</div>
+
+<div class="overlay" id="ov"><div class="sheet" role="dialog" aria-modal="true" id="sheet"></div></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script>
+const KEY = 'timelog-v1';
+const COLORS = ['#2450B8','#0F8B8D','#7A4FD0','#3F7FBF','#2E8B57','#B5476B','#C98A0B','#8C6A3F','#4F9D69','#6B7B8C','#D1495B','#3B3F8F','#9A6FB0','#1F9EA8'];
+const DEFAULTS = [['QBUS3600',1],['DATA3406',1],['QBUS3340',1],['上课',1],['复习/自习',1],['工作',1],['做菜',0],['吃饭',0],['去超市',0],['运动',0],['通勤',0],['打扫房间',0],['洗漱',0],['休息',0],['刷手机',0],['睡觉',0]];
+const FOCUS = ['走神','偏低','一般','专注','心流'];
+const WK = '日一二三四五六';
+const REASONS = ['刷手机','英语看不懂/听不懂','太累','不知道下一步','环境干扰','其他'];
+const ESTS = [5,10,15,20,30,45,60,90,120,150,180,240,300];
+
+function uid(){ return Math.random().toString(36).slice(2,8) + Date.now().toString(36); }
+function fresh(){
+  return { activities: DEFAULTS.map((d,i)=>({id:'d-'+d[0], name:d[0], rate:!!d[1], color:COLORS[i % COLORS.length], hidden:false})), entries: [], current: null, plans: {}, tomb: {}, curU: 0, nodes: [] };
+}
+function load(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if(raw){ const s = JSON.parse(raw); if(s && Array.isArray(s.activities) && Array.isArray(s.entries)) return s; }
+  }catch(e){}
+  return fresh();
+}
+let snap = {};
+function allItems(s){
+  const out = [...s.activities, ...s.entries, ...(s.nodes || [])];
+  Object.values(s.plans || {}).forEach(l => out.push(...l));
+  return out;
+}
+function keyOf(o){ const {u, ...r} = o; return JSON.stringify(r); }
+function rebuildSnap(){
+  snap = {};
+  allItems(S).forEach(it => { snap[it.id] = keyOf(it); });
+  snap.__cur = JSON.stringify(S.current);
+}
+// Marks whatever changed since the last save with a timestamp, so two devices can merge.
+function touch(){
+  const now = Date.now(), seen = new Set();
+  let changed = false;
+  if(!S.tomb) S.tomb = {};
+  allItems(S).forEach(it => {
+    seen.add(it.id);
+    const k = keyOf(it);
+    if(snap[it.id] !== k){ it.u = now; snap[it.id] = k; changed = true; }
+  });
+  Object.keys(snap).forEach(id => {
+    if(id !== '__cur' && !seen.has(id)){ S.tomb[id] = now; delete snap[id]; changed = true; }
+  });
+  const c = JSON.stringify(S.current);
+  if(snap.__cur !== c){ S.curU = now; snap.__cur = c; changed = true; }
+  return changed;
+}
+function save(quiet){
+  const changed = touch();
+  try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){}
+  if(changed && !quiet) schedulePush();
+  return changed;
+}
+
+let S = load();
+if(!S.plans) S.plans = {};
+if(!S.tomb) S.tomb = {};
+if(!S.nodes) S.nodes = [];
+rebuildSnap();
+DEFAULTS.forEach(([name, rate]) => {
+  if(!S.activities.some(a => a.name === name)){
+    S.activities.push({id:uid(), name, rate:!!rate, color:COLORS[S.activities.length % COLORS.length], hidden:false});
+  }
+});
+if(!S.plans) S.plans = {};
+save();
+let editMode = false;
+let editing = null;
+
+const $ = s => document.querySelector(s);
+const pad = n => String(n).padStart(2,'0');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function sod(t){ const d = new Date(t); d.setHours(0,0,0,0); return d.getTime(); }
+function addDays(t,n){ const d = new Date(t); d.setDate(d.getDate()+n); d.setHours(0,0,0,0); return d.getTime(); }
+function hm(t){ const d = new Date(t); return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+function durTxt(ms){ const m = Math.round(ms/60000), h = Math.floor(m/60), r = m%60; return h ? (r ? `${h}小时${r}分` : `${h}小时`) : `${r}分`; }
+function clock(ms){ const s = Math.max(0, Math.floor(ms/1000)); return `${Math.floor(s/3600)}:${pad(Math.floor(s/60)%60)}:${pad(s%60)}`; }
+function dateTxt(t){ const d = new Date(t); return `${d.getMonth()+1}月${d.getDate()}日 周${WK[d.getDay()]}`; }
+function isoDate(t){ const d = new Date(t); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function at(base, timeStr){ const [h,m] = timeStr.split(':').map(Number); const d = new Date(base); d.setHours(h,m,0,0); return d.getTime(); }
+function actById(id){ return S.activities.find(a => a.id === id) || {name:'(已删除)', color:'#999999', rate:false}; }
+
+let view = sod(Date.now());
+
+function dayItems(d){
+  const e = addDays(d,1), now = Date.now();
+  const items = S.entries.filter(x => x.start < e && x.end > d).map(x => ({...x, live:false}));
+  if(S.current && S.current.start < e && now > d) items.push({id:'__live', act:S.current.act, start:S.current.start, end:now, focus:null, note:S.current.note||'', live:true});
+  return items.sort((a,b) => a.start - b.start);
+}
+function actualFor(act, d){ return dayItems(d).filter(x => x.act === act).reduce((s,x) => s + clip(x, d), 0); }
+function clip(it, d){ const e = addDays(d,1); return Math.max(0, Math.min(it.end, e) - Math.max(it.start, d)); }
+
+function render(){
+  if(tab === 'dash'){ renderDash(); return; }
+  if(tab === 'learn'){ renderLearn(); return; }
+  const today = sod(Date.now());
+  const items = dayItems(view);
+  const tracked = items.reduce((s,it) => s + clip(it, view), 0);
+  $('#dTitle').textContent = dateTxt(view);
+  $('#dSub').textContent = (view === today ? '今天，' : '') + '已记录 ' + durTxt(tracked);
+  $('#nextBtn').disabled = view >= today;
+
+  // now card
+  const nowEl = $('#now');
+  if(S.current){
+    const a = actById(S.current.act);
+    nowEl.style.setProperty('--nowc', a.color);
+    nowEl.innerHTML = `<div class="label">正在进行</div><div class="act">${esc(a.name)}</div>${S.current.note ? `<div class="note">${esc(S.current.note)}</div>` : ''}
+      <div class="timer" id="timer">${clock(Date.now() - S.current.start)}</div>
+      <div class="row"><span class="since">从 ${hm(S.current.start)} 开始</span>
+      <span class="btns"><button class="btn" data-action="editCurrent">修改 / 备注</button><button class="btn primary" data-action="stop">结束</button></span></div>${a.rate ? sprintRow() : ''}`;
+  }else{
+    nowEl.style.removeProperty('--nowc');
+    nowEl.innerHTML = `<div class="label">现在没有在计时</div><div class="act">点下面的活动开始</div><div class="timer idle" id="timer">0:00:00</div>`;
+  }
+
+  // strip
+  const e = addDays(view,1), span = e - view;
+  let strip = '';
+  items.forEach(it => {
+    const s = Math.max(it.start, view), en = Math.min(it.end, e);
+    if(en <= s) return;
+    strip += `<div class="seg${it.live?' live':''}" style="left:${(s-view)/span*100}%;width:${(en-s)/span*100}%;background:${actById(it.act).color}" title="${esc(actById(it.act).name)}"></div>`;
+  });
+  if(view === today) strip += `<div class="nowline" style="left:${(Date.now()-view)/span*100}%"></div>`;
+  $('#strip').innerHTML = strip;
+
+  // plan
+  const isToday = view === today;
+  $('#planTitle').textContent = isToday ? '今日计划' : '这天的计划';
+  const plans = S.plans[isoDate(view)] || [];
+  if(!plans.length){
+    $('#plan').innerHTML = `<div class="empty" style="background:var(--surface);border-radius:12px">${isToday ? '早上把最重要的 2–3 件事排进时间块（几点开始、做多久），晚上看看实际情况。' : '这一天没有写计划。'}</div>`;
+  }else{
+    const sorted = [...plans].sort((a,b) => (a.at || '99') < (b.at || '99') ? -1 : 1);
+    $('#plan').innerHTML = '<ul class="plan">' + sorted.map(p => {
+      const actual = actualFor(p.act, view);
+      const over = actual > p.est * 60000 * 1.2;
+      const first = dayItems(view).find(x => x.act === p.act);
+      let block = '';
+      if(p.at){
+        const ps = at(view, p.at);
+        block = `${p.at}–${hm(ps + p.est*60000)}`;
+        if(first){ const late = Math.round((first.start - ps) / 60000); block += ` · 实际 ${hm(first.start)} 开始${late > 10 ? `<span class="over">（晚 ${durTxt(late*60000)}）</span>` : ''}`; }
+        block += '<br>';
+      }
+      return `<li><button class="tick${p.done?' done':''}" data-action="togglePlan" data-id="${p.id}" aria-label="${p.done?'标为未完成':'标为完成'}">${p.done?'✓':''}</button>
+        <button class="pbody" data-action="plan" data-id="${p.id}"><span class="pt${p.done?' done':''}">${esc(actById(p.act).name)}${p.text ? '：' + esc(p.text) : ''}</span>
+        <span class="pm">${block}预计 ${durTxt(p.est*60000)} · 实际 <span class="${over?'over':''}">${durTxt(actual)}</span></span></button></li>`;
+    }).join('') + '</ul>';
+  }
+
+  // grid
+  const grid = $('#grid');
+  grid.classList.toggle('editing', editMode);
+  $('#editBtn').textContent = editMode ? '完成' : '整理';
+  $('#gridTitle').textContent = editMode ? '点一个活动把它删掉' : '点一下开始计时';
+  grid.innerHTML = S.activities.filter(a => !a.hidden).map(a =>
+    `<button class="act-btn${S.current && S.current.act===a.id ? ' on':''}" style="--c:${a.color}" data-action="act" data-id="${a.id}"><span class="dot" style="background:${a.color}"></span>${esc(a.name)}</button>`
+  ).join('') + `<button class="act-btn add" data-action="newAct">＋ 新活动</button>`;
+
+  // list
+  if(!items.length){
+    $('#list').innerHTML = `<li class="empty">这一天还没有记录。点上面的活动开始计时，或者用“补记一条”把漏掉的时间加上。</li>`;
+  }else{
+    $('#list').innerHTML = items.map(it => {
+      const a = actById(it.act);
+      const st = (it.start < view ? '前天 ' : '') + hm(it.start);
+      const en = it.live ? '现在' : hm(it.end) + (it.end > e ? '+1' : '');
+      let f = it.focus ? `专注 ${it.focus} · ${FOCUS[it.focus-1]}${it.reason ? ' · ' + esc(it.reason) : ''}` : (a.rate && !it.live ? '未评专注度' : '');
+      const bl = it.live ? (S.current.blocks || 0) : (it.blocks || 0);
+      if(bl) f = (f ? f + ' · ' : '') + `5 分钟块 ×${bl}`;
+      return `<li><button class="entry" data-action="${it.live ? 'editCurrent' : 'entry'}" data-id="${it.id}">
+        <span class="t">${st}–${en}</span>
+        <span class="n"><span class="dot" style="background:${a.color}"></span><span class="nm">${esc(a.name)}${it.note ? `<span class="note">${esc(it.note)}</span>` : ''}</span></span>
+        <span class="d">${durTxt(it.end - it.start)}${f ? `<span class="f">${f}</span>` : ''}</span></button></li>`;
+    }).join('');
+  }
+
+  // totals
+  const tot = {};
+  let studyAll = 0, studyHigh = 0;
+  items.forEach(it => {
+    const c = clip(it, view);
+    tot[it.act] = (tot[it.act] || 0) + c;
+    if(actById(it.act).rate){ studyAll += c; if(it.focus >= 4) studyHigh += c; }
+  });
+  const rows = Object.entries(tot).sort((x,y) => y[1] - x[1]);
+  const max = rows.length ? rows[0][1] : 1;
+  $('#totals').innerHTML = rows.length ? rows.map(([id,ms]) => {
+    const a = actById(id);
+    return `<div class="tot"><span class="nm">${esc(a.name)}</span><span class="bar"><i style="width:${ms/max*100}%;background:${a.color}"></i></span><span>${durTxt(ms)}</span></div>`;
+  }).join('') + `<div class="summary">学习和工作共 <b>${durTxt(studyAll)}</b>，其中高专注（4–5 分）<b>${durTxt(studyHigh)}</b></div>`
+  : `<div class="empty" style="background:var(--surface);border-radius:12px">有记录之后，这里会显示每项活动用了多少时间。</div>`;
+}
+
+function tick(){
+  const t = $('#timer');
+  if(t && S.current) t.textContent = clock(Date.now() - S.current.start);
+  if(S.current && S.current.sprint){
+    const left = S.current.sprint - Date.now();
+    if(left <= 0) sprintDone();
+    else { const el = $('#spLeft'); if(el) el.textContent = clock(left).replace(/^0:/, ''); }
+  }
+}
+setInterval(tick, 1000);
+setInterval(render, 30000);
+document.addEventListener('visibilitychange', () => { if(!document.hidden){ render(); syncNow(); } });
+
+function toast(msg){
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2200);
+}
+function openSheet(html){ $('#sheet').innerHTML = html; $('#ov').classList.add('open'); const f = $('#sheet').querySelector('button,input,select,textarea'); if(f) f.focus(); }
+function closeSheet(){ $('#ov').classList.remove('open'); editing = null; }
+
+function endCurrent(){
+  const c = S.current; if(!c) return null;
+  const end = Date.now(); S.current = null;
+  if(end - c.start < 60000){ toast('不到 1 分钟，这段没有记下'); return null; }
+  const en = {id:uid(), act:c.act, start:c.start, end, focus:null, note:c.note||''};
+  if(c.blocks) en.blocks = c.blocks;
+  S.entries.push(en);
+  return en;
+}
+function switchTo(id){
+  if(S.current && S.current.act === id){ toast('已经在记录这一项'); return; }
+  const prev = endCurrent();
+  S.current = {act:id, start:Date.now(), note:''};
+  save(); view = sod(Date.now()); render();
+  if(prev && actById(prev.act).rate) openRate(prev.id);
+}
+function stop(){
+  const prev = endCurrent(); save(); render();
+  if(prev && actById(prev.act).rate) openRate(prev.id);
+}
+
+function openRate(id){
+  const en = S.entries.find(x => x.id === id); if(!en) return;
+  editing = {mode:'rate', id};
+  openSheet(`<h3>刚才的「${esc(actById(en.act).name)}」专注度怎么样？</h3>
+    <p class="sub">${hm(en.start)}–${hm(en.end)}，${durTxt(en.end - en.start)}</p>
+    <div class="rate">${FOCUS.map((l,i) => `<button data-action="rate" data-id="${i+1}"><b>${i+1}</b><span>${l}</span></button>`).join('')}</div>
+    <button class="link" data-action="close">先跳过，之后再评</button>`);
+}
+
+function openReason(id){
+  editing = {mode:'reason', id};
+  openSheet(`<h3>是什么让你分心了？</h3><p class="sub">选一个最主要的原因，复盘时会用到。</p>
+    <div class="reasons">${REASONS.map((r,i) => `<button data-action="reason" data-id="${i}">${r}</button>`).join('')}</div>
+    <button class="link" data-action="close">跳过</button>`);
+}
+function reasonOptions(sel){
+  return `<option value="">没有 / 不填</option>` + REASONS.map(r => `<option value="${r}"${r===sel?' selected':''}>${r}</option>`).join('');
+}
+
+function plansToday(){ const k = isoDate(view); if(!S.plans[k]) S.plans[k] = []; return S.plans[k]; }
+function openPlan(id){
+  const list = S.plans[isoDate(view)] || [];
+  const p = id ? list.find(x => x.id === id) : null;
+  if(!p && list.length >= 3) toast('建议每天最多 3 件最重要的事');
+  const first = S.activities.find(a => !a.hidden && a.rate) || S.activities.find(a => !a.hidden);
+  editing = {mode:'plan', id: p ? p.id : null};
+  const est = p ? p.est : 60;
+  openSheet(`<h3>${p ? '修改计划' : '加一项计划'}（${dateTxt(view)}）</h3>
+    <p class="sub">实际时间会按这个活动当天的记录自动计算。</p>
+    <label class="field">活动<select id="fAct">${actOptions(p ? p.act : (first ? first.id : ''))}</select></label>
+    <label class="field">具体要做什么（可不填）<input id="fText" maxlength="40" placeholder="比如：写完 assignment 第 2 题" value="${p ? esc(p.text) : ''}"></label>
+    <label class="field">开始时间（时间块，可不填）<input id="fAt" type="time" value="${p && p.at ? p.at : ''}"></label>
+    <label class="field">预计时间<select id="fEst">${ESTS.map(m => `<option value="${m}"${m===est?' selected':''}>${durTxt(m*60000)}</option>`).join('')}</select></label>
+    <div class="row">${p ? '<button class="btn danger" data-action="delPlan">删除</button>' : ''}<button class="btn" data-action="close">取消</button><button class="btn primary" data-action="savePlan">${p ? '保存' : '添加'}</button></div>`);
+}
+function savePlan(){
+  const act = $('#fAct').value; if(!act){ toast('请选一个活动'); return; }
+  const text = $('#fText').value.trim(), est = Number($('#fEst').value), at = $('#fAt').value || '';
+  const list = plansToday();
+  if(editing.id){ Object.assign(list.find(x => x.id === editing.id), {act, text, est, at}); }
+  else list.push({id:uid(), act, text, est, at, done:false});
+  save(); closeSheet(); render();
+}
+function delPlan(){
+  const k = isoDate(view);
+  S.plans[k] = (S.plans[k] || []).filter(x => x.id !== editing.id);
+  save(); closeSheet(); render();
+}
+function togglePlan(id){
+  const p = (S.plans[isoDate(view)] || []).find(x => x.id === id);
+  if(p){ p.done = !p.done; save(); render(); }
+}
+
+function openBackup(){
+  editing = {mode:'backup'};
+  openSheet(`<h3>备份数据</h3><p class="sub">把下面整段文字复制下来，存到备忘录或发给自己。建议每周一次。</p>
+    <label class="field"><textarea id="fBackup" class="small" readonly>${esc(JSON.stringify(S))}</textarea></label>
+    <button class="btn primary" data-action="copyBackup">复制备份</button>
+    <hr>
+    <h3>导入数据</h3><p class="sub">把旧版记录工具的备份粘贴到这里，会和现在的数据合并，不会删掉已有记录。</p>
+    <label class="field"><textarea id="fImport" class="small" placeholder="把备份内容粘贴到这里"></textarea></label>
+    <div class="row"><button class="btn" data-action="close">关闭</button><button class="btn primary" data-action="doImport">合并导入</button></div>`);
+}
+async function copyBackup(){
+  const ta = $('#fBackup');
+  try{ if(!navigator.clipboard) throw 0; await navigator.clipboard.writeText(ta.value); toast('备份已复制'); }
+  catch(e){ ta.focus(); ta.select(); toast('已选中，长按复制'); }
+}
+function doImport(){
+  try{
+    const o = JSON.parse($('#fImport').value);
+    if(!o || !Array.isArray(o.activities) || !Array.isArray(o.entries)) throw 0;
+    S = merge(S, o); if(!S.nodes) S.nodes = []; dedupe(); save(); closeSheet(); view = sod(Date.now()); render(); toast('已合并导入');
+  }catch(e){ toast('内容不对，请粘贴完整的备份文字'); }
+}
+
+function actOptions(sel){
+  return S.activities.filter(a => !a.hidden || a.id === sel).map(a => `<option value="${a.id}"${a.id===sel?' selected':''}>${esc(a.name)}</option>`).join('');
+}
+function focusOptions(sel){
+  return `<option value="">未评</option>` + FOCUS.map((l,i) => `<option value="${i+1}"${sel===i+1?' selected':''}>${i+1} · ${l}</option>`).join('');
+}
+function openEntry(id){
+  const en = S.entries.find(x => x.id === id); if(!en) return;
+  editing = {mode:'entry', id};
+  openSheet(`<h3>修改这条记录</h3>
+    <label class="field">活动<select id="fAct">${actOptions(en.act)}</select></label>
+    <label class="field">开始<input id="fStart" type="time" value="${hm(en.start)}"></label>
+    <label class="field">结束<input id="fEnd" type="time" value="${hm(en.end)}"></label>
+    <label class="field">专注度<select id="fFocus">${focusOptions(en.focus)}</select></label>
+    <label class="field">分心原因（专注度低时填）<select id="fReason">${reasonOptions(en.reason)}</select></label>
+    <label class="field">备注（可不填）<input id="fNote" maxlength="60" placeholder="比如：洗头" value="${esc(en.note||'')}"></label>
+    <div class="row"><button class="btn danger" data-action="delEntry">删除</button><button class="btn" data-action="close">取消</button><button class="btn primary" data-action="saveEntry">保存</button></div>`);
+}
+function openNewEntry(){
+  const today = sod(Date.now());
+  let s = view === today ? Date.now() - 3600000 : at(view, '09:00');
+  if(s < view) s = view;
+  const first = S.activities.find(a => !a.hidden);
+  editing = {mode:'new'};
+  openSheet(`<h3>补记一条（${dateTxt(view)}）</h3>
+    <p class="sub">忘记点按钮的时候用这个。结束早于开始会算到第二天。</p>
+    <label class="field">活动<select id="fAct">${actOptions(first ? first.id : '')}</select></label>
+    <label class="field">开始<input id="fStart" type="time" value="${hm(s)}"></label>
+    <label class="field">结束<input id="fEnd" type="time" value="${hm(Math.min(s + 3600000, Date.now()))}"></label>
+    <label class="field">专注度<select id="fFocus">${focusOptions(null)}</select></label>
+    <label class="field">分心原因（专注度低时填）<select id="fReason">${reasonOptions('')}</select></label>
+    <label class="field">备注（可不填）<input id="fNote" maxlength="60" placeholder="比如：洗头" value="${esc('')}"></label>
+    <div class="row"><button class="btn" data-action="close">取消</button><button class="btn primary" data-action="saveEntry">添加</button></div>`);
+}
+function saveEntry(){
+  const act = $('#fAct').value, fs = $('#fStart').value, fe = $('#fEnd').value, fo = $('#fFocus').value;
+  if(!act || !fs || !fe){ toast('请把活动和时间填完整'); return; }
+  const base = editing.mode === 'new' ? view : sod(S.entries.find(x => x.id === editing.id).start);
+  const start = at(base, fs);
+  let end = at(base, fe);
+  if(end <= start) end = at(addDays(base,1), fe);
+  if(end > Date.now() + 60000){ toast('结束时间不能晚于现在'); return; }
+  const focus = fo ? Number(fo) : null;
+  const note = $('#fNote').value.trim();
+  const reason = $('#fReason').value;
+  if(editing.mode === 'new'){
+    S.entries.push({id:uid(), act, start, end, focus, note, reason});
+    toast('已添加');
+  }else{
+    Object.assign(S.entries.find(x => x.id === editing.id), {act, start, end, focus, note, reason});
+    toast('已保存');
+  }
+  save(); closeSheet(); render();
+}
+function delEntry(){
+  S.entries = S.entries.filter(x => x.id !== editing.id);
+  save(); closeSheet(); render(); toast('已删除');
+}
+function openCurrent(){
+  if(!S.current) return;
+  editing = {mode:'current'};
+  openSheet(`<h3>修改正在进行的活动</h3>
+    <p class="sub">可以加备注，或者把开始时间往前调（比如 14:00 就开始了，14:20 才想起来点）。</p>
+    <label class="field">活动<select id="fAct">${actOptions(S.current.act)}</select></label>
+    <label class="field">开始<input id="fStart" type="time" value="${hm(S.current.start)}"></label>
+    <label class="field">备注（可不填）<input id="fNote" maxlength="60" placeholder="比如：洗头" value="${esc(S.current.note||'')}"></label>
+    <div class="row"><button class="btn" data-action="close">取消</button><button class="btn primary" data-action="saveCurrent">保存</button></div>`);
+}
+function saveCurrent(){
+  const fs = $('#fStart').value; if(!fs) return;
+  let start = at(sod(Date.now()), fs);
+  if(start > Date.now()) start = at(addDays(sod(Date.now()), -1), fs);
+  S.current = {act:$('#fAct').value, start, note:$('#fNote').value.trim()};
+  save(); closeSheet(); render(); toast('已保存');
+}
+
+function openNewAct(){
+  editing = {mode:'newAct'};
+  openSheet(`<h3>新活动</h3>
+    <label class="field">名称<input id="fName" maxlength="16" placeholder="比如：写简历、兼职、打游戏"></label>
+    <label class="check"><input id="fRate" type="checkbox" checked> 结束时问我专注度（学习和工作类建议勾上）</label>
+    <div class="row"><button class="btn" data-action="close">取消</button><button class="btn primary" data-action="saveNewAct">添加</button></div>`);
+}
+function saveNewAct(){
+  const name = $('#fName').value.trim();
+  if(!name){ toast('请输入名称'); return; }
+  S.activities.push({id:uid(), name, rate:$('#fRate').checked, color:COLORS[S.activities.length % COLORS.length], hidden:false});
+  save(); closeSheet(); render(); toast('已添加「' + name + '」');
+}
+function openDelAct(id){
+  const a = actById(id);
+  editing = {mode:'delAct', id};
+  openSheet(`<h3>删除「${esc(a.name)}」？</h3>
+    <p class="sub">按钮会消失，以前的记录会保留。</p>
+    <div class="row"><button class="btn" data-action="close">取消</button><button class="btn danger" data-action="doDelAct">删除</button></div>`);
+}
+function doDelAct(){
+  const a = S.activities.find(x => x.id === editing.id);
+  if(a) a.hidden = true;
+  if(S.current && S.current.act === editing.id) stop();
+  save(); closeSheet(); render();
+}
+
+function buildText(){
+  const items = dayItems(view);
+  const d = new Date(view);
+  const lines = [`日期：${isoDate(view)}（周${WK[d.getDay()]}）`];
+  const plans = S.plans[isoDate(view)] || [];
+  if(plans.length){
+    lines.push('', '计划 vs 实际：');
+    plans.forEach(p => lines.push(`${p.done ? '✓' : '✗'} ${p.at ? '[' + p.at + '] ' : ''}${actById(p.act).name}${p.text ? '：' + p.text : ''} | 预计 ${durTxt(p.est*60000)} | 实际 ${durTxt(actualFor(p.act, view))}`));
+  }
+  lines.push('', '时间段 | 做了什么 | 时长 | 专注度(1-5)');
+  items.forEach(it => {
+    const a = actById(it.act);
+    let f = it.focus ? String(it.focus) + (it.reason ? `（${it.reason}）` : '') : (a.rate && !it.live ? '未评' : '-');
+    const bl = it.live ? (S.current.blocks || 0) : (it.blocks || 0);
+    if(bl) f += ` | 5分钟块×${bl}`;
+    lines.push(`${hm(it.start)}-${it.live ? '进行中' : hm(it.end)} | ${a.name}${it.note ? `（${it.note}）` : ''} | ${durTxt(it.end - it.start)} | ${f}`);
+  });
+  const tot = {}; let all = 0, high = 0;
+  items.forEach(it => { const c = clip(it, view); tot[it.act] = (tot[it.act]||0) + c; if(actById(it.act).rate){ all += c; if(it.focus >= 4) high += c; } });
+  lines.push('', '合计：');
+  Object.entries(tot).sort((x,y) => y[1]-x[1]).forEach(([id,ms]) => lines.push(`${actById(id).name} ${durTxt(ms)}`));
+  lines.push(`学习和工作 ${durTxt(all)}，高专注 ${durTxt(high)}`, '', '今天最卡的地方：', '明天想完成的事：');
+  return lines.join('\n');
+}
+async function copyText(){
+  if(!dayItems(view).length && !(S.plans[isoDate(view)]||[]).length){ toast('这一天还没有记录'); return; }
+  const t = buildText();
+  try{
+    if(!navigator.clipboard) throw new Error('no clipboard');
+    await navigator.clipboard.writeText(t);
+    toast('已复制，粘贴发给 Claude 就行');
+  }catch(e){
+    editing = {mode:'copy'};
+    openSheet(`<h3>复制这段文字</h3><p class="sub">长按选中全部，复制后发给 Claude。最后两行可以补上你的想法。</p>
+      <label class="field"><textarea id="fText" readonly>${esc(t)}</textarea></label>
+      <div class="row"><button class="btn primary" data-action="close">完成</button></div>`);
+    const ta = $('#fText'); ta.focus(); ta.select();
+  }
+}
+
+document.addEventListener('click', e => {
+  if(e.target === $('#ov')){ closeSheet(); return; }
+  const t = e.target.closest('[data-action]'); if(!t) return;
+  const id = t.dataset.id;
+  switch(t.dataset.action){
+    case 'prev': view = addDays(view,-1); render(); break;
+    case 'next': if(view < sod(Date.now())){ view = addDays(view,1); render(); } break;
+    case 'toggleEdit': editMode = !editMode; render(); break;
+    case 'act': editMode ? openDelAct(id) : switchTo(id); break;
+    case 'newAct': openNewAct(); break;
+    case 'stop': stop(); break;
+    case 'editCurrent': openCurrent(); break;
+    case 'entry': openEntry(id); break;
+    case 'addEntry': openNewEntry(); break;
+    case 'copy': copyText(); break;
+    case 'rate': {
+      const en = S.entries.find(x => x.id === editing.id);
+      if(en){ en.focus = Number(id); save(); }
+      render();
+      if(en && en.focus <= 2) openReason(en.id); else closeSheet();
+      break; }
+    case 'reason': { const en = S.entries.find(x => x.id === editing.id); if(en){ en.reason = REASONS[Number(id)]; save(); } closeSheet(); render(); break; }
+    case 'addPlan': openPlan(null); break;
+    case 'plan': openPlan(id); break;
+    case 'togglePlan': togglePlan(id); break;
+    case 'savePlan': savePlan(); break;
+    case 'delPlan': delPlan(); break;
+    case 'backup': openBackup(); break;
+    case 'copyBackup': copyBackup(); break;
+    case 'doImport': doImport(); break;
+    case 'close': closeSheet(); break;
+    case 'saveEntry': saveEntry(); break;
+    case 'delEntry': delEntry(); break;
+    case 'saveCurrent': saveCurrent(); break;
+    case 'saveNewAct': saveNewAct(); break;
+    case 'doDelAct': doDelAct(); break;
+    case 'tab': setTab(id); break;
+    case 'range': rangeN = Number(id); dSel = null; hSel = null; renderDash(); break;
+    case 'dcol': dSel = dSel === Number(id) ? null : Number(id); renderDash(); break;
+    case 'hcol': hSel = hSel === Number(id) ? null : Number(id); renderDash(); break;
+    case 'copyPeriod': copyPeriod(); break;
+    case 'account': openAccount(); break;
+    case 'sprint': sprintStart(); break;
+    case 'sprintStop': if(S.current){ S.current.sprint = null; save(); render(); } break;
+    case 'sprintAgain': closeSheet(); sprintStart(); break;
+    case 'sprintRest': { closeSheet(); const r = S.activities.find(a => a.name === '休息' && !a.hidden); if(r) switchTo(r.id); break; }
+    case 'cycleM': cycleM(id); break;
+    case 'addNode': openNode(null, id || null); break;
+    case 'editNode': openNode(id); break;
+    case 'saveNode': saveNode(); break;
+    case 'delNode': delNode(); break;
+    case 'copyTree': copyTree(); break;
+    case 'login': authDo('in'); break;
+    case 'signup': authDo('up'); break;
+    case 'logout': if(sb) sb.auth.signOut(); closeSheet(); break;
+    case 'syncNow': closeSheet(); syncNow(); break;
+  }
+});
+document.addEventListener('keydown', e => { if(e.key === 'Escape' && $('#ov').classList.contains('open')) closeSheet(); });
+
+/* ============ 看板 ============ */
+let tab = 'day', rangeN = 7, dSel = null, hSel = null;
+
+function setTab(t){
+  tab = t;
+  $('#dayView').hidden = t !== 'day';
+  $('#dashView').hidden = t !== 'dash';
+  $('#tabDay').setAttribute('aria-selected', String(t === 'day'));
+  $('#tabDash').setAttribute('aria-selected', String(t === 'dash'));
+  $('#learnView').hidden = t !== 'learn';
+  $('#tabLearn').setAttribute('aria-selected', String(t === 'learn'));
+  if(t === 'day') view = sod(Date.now());
+  render();
+  window.scrollTo(0, 0);
+}
+
+function hrs(ms){ return (ms / 3600000).toFixed(1); }
+function shade(f){ // 专注度 1–5 → 同一色相由浅到深
+  if(!f) return 'var(--line)';
+  const p = Math.round(20 + (Math.min(5, Math.max(1, f)) - 1) / 4 * 80);
+  return `color-mix(in srgb, var(--accent) ${p}%, var(--surface))`;
+}
+
+function periodStats(endDay, n){
+  const days = [], hours = Array.from({length:24}, () => ({ms:0, fs:0, fw:0}));
+  const acts = {}, reasons = {};
+  let plansN = 0, plansDone = 0, est = 0, actual = 0;
+  for(let i = n - 1; i >= 0; i--){
+    const d = addDays(endDay, -i), e = addDays(d, 1);
+    let study = 0, high = 0, tracked = 0, fs = 0, fw = 0;
+    dayItems(d).forEach(it => {
+      const c = clip(it, d); if(!c) return;
+      tracked += c;
+      acts[it.act] = (acts[it.act] || 0) + c;
+      if(it.reason) reasons[it.reason] = (reasons[it.reason] || 0) + 1;
+      if(!actById(it.act).rate) return;
+      study += c;
+      if(it.focus >= 4) high += c;
+      if(it.focus){ fs += it.focus * c; fw += c; }
+      let t = Math.max(it.start, d); const en = Math.min(it.end, e);
+      while(t < en){
+        const dt = new Date(t), h = dt.getHours();
+        dt.setHours(h + 1, 0, 0, 0);
+        const nx = Math.min(dt.getTime(), en), s = nx - t;
+        hours[h].ms += s;
+        if(it.focus){ hours[h].fs += it.focus * s; hours[h].fw += s; }
+        t = nx;
+      }
+    });
+    (S.plans[isoDate(d)] || []).forEach(p => {
+      plansN++; if(p.done) plansDone++;
+      est += p.est * 60000; actual += actualFor(p.act, d);
+    });
+    days.push({d, study, high, tracked, focus: fw ? fs / fw : null});
+  }
+  const logged = days.filter(x => x.tracked > 0).length;
+  const sum = k => days.reduce((s, x) => s + x[k], 0);
+  const fwAll = hours.reduce((s, h) => s + h.fw, 0), fsAll = hours.reduce((s, h) => s + h.fs, 0);
+  return {days, hours, acts, reasons, logged, plansN, plansDone, est, actual,
+    high: sum('high'), study: sum('study'),
+    avgHigh: logged ? sum('high') / logged : 0,
+    avgStudy: logged ? sum('study') / logged : 0,
+    focus: fwAll ? fsAll / fwAll : null};
+}
+
+function insights(P){
+  const out = [];
+  // 最专注的两小时
+  let best = null;
+  for(let h = 0; h < 23; h++){
+    const a = P.hours[h], b = P.hours[h + 1];
+    const fw = a.fw + b.fw;
+    if(fw < 45 * 60000) continue;
+    const f = (a.fs + b.fs) / fw;
+    if(!best || f > best.f) best = {h, f};
+  }
+  if(best) out.push(`你在 <b>${best.h}–${best.h + 2} 点</b>最专注（平均 ${best.f.toFixed(1)} 分）。把最难的作业放在这个时段。`);
+  // 学习最集中的时段
+  let peak = -1, pm = 0;
+  P.hours.forEach((h, i) => { if(h.ms > pm){ pm = h.ms; peak = i; } });
+  if(peak >= 0 && best && (peak < best.h || peak > best.h + 1))
+    out.push(`你学习最多的是 <b>${peak} 点</b>那个小时，但那时专注度不是最高的，可以试试把学习往专注时段挪。`);
+  const phone = S.activities.find(a => a.name === '刷手机');
+  if(phone && P.acts[phone.id] && P.logged)
+    out.push(`刷手机平均每天 <b>${durTxt(P.acts[phone.id] / P.logged)}</b>（只算你点了按钮的部分）。`);
+  const top = Object.entries(P.reasons).sort((a, b) => b[1] - a[1])[0];
+  if(top) out.push(`最常见的分心原因是「<b>${esc(top[0])}</b>」，出现了 ${top[1]} 次。`);
+  if(P.est > 0){
+    const r = P.actual / P.est;
+    if(r > 1.15) out.push(`计划的实际用时是预计的 <b>${r.toFixed(1)} 倍</b>，安排时可以多留 ${Math.round((r - 1) * 100)}% 的时间。`);
+    else if(r < 0.85) out.push(`计划实际只用了预计时间的 <b>${Math.round(r * 100)}%</b>，可能是没做完就停了，也可能预计得太多。`);
+  }
+  const B = blockStats(sod(Date.now()), rangeN);
+  if(B) out.unshift(`用 5 分钟冲刺时，你平均连续完成 <b>${B.avg.toFixed(1)} 块</b>（约 ${Math.round(B.avg * 5)} 分钟），最长一次 ${B.max} 块。下次试着比平均多坚持一块。`);
+  return out;
+}
+
+function renderDash(){
+  const today = sod(Date.now());
+  const P = periodStats(today, rangeN);
+  const Q = periodStats(addDays(today, -rangeN), rangeN);
+  const el = $('#dashView');
+
+  const range = `<div class="range" role="group" aria-label="时间范围">${[7, 14, 30].map(n =>
+    `<button data-action="range" data-id="${n}" aria-pressed="${n === rangeN}">近 ${n} 天</button>`).join('')}</div>`;
+
+  if(!P.logged){
+    el.innerHTML = range + `<div class="hero"><div class="label">日均高专注学习</div><div class="big">0<small>小时/天</small></div>
+      <div class="meta">这段时间还没有记录。回到「记录」页点按钮开始计时，有一两天数据后这里就会出图。</div></div>`;
+    return;
+  }
+
+  let delta = '';
+  if(Q.logged){
+    const dv = (P.avgHigh - Q.avgHigh) / 3600000;
+    const cls = dv > 0.05 ? 'up' : dv < -0.05 ? 'down' : '';
+    delta = `<span class="delta ${cls}">比前 ${rangeN} 天 ${dv >= 0 ? '+' : '−'}${Math.abs(dv).toFixed(1)} 小时</span>`;
+  }
+  const hero = `<div class="hero"><div class="label">日均高专注学习（专注度 4–5 分）</div>
+    <div class="big">${hrs(P.avgHigh)}<small>小时/天</small></div>
+    <div class="meta"><span>记录了 ${P.logged}/${rangeN} 天</span>${delta}</div></div>
+    <div class="stats">
+      <div class="stat"><b>${hrs(P.avgStudy)}<small style="font-size:12px;font-weight:400"> 小时</small></b><span>日均学习工作</span></div>
+      <div class="stat"><b>${P.focus ? P.focus.toFixed(1) : '–'}<small style="font-size:12px;font-weight:400"> /5</small></b><span>平均专注度</span></div>
+      <div class="stat"><b>${P.plansN ? P.plansDone + '/' + P.plansN : '–'}</b><span>计划完成</span></div>
+    </div>`;
+
+  // 每天学习时间
+  const maxH = Math.max(1, Math.ceil(Math.max(...P.days.map(x => x.study)) / 3600000));
+  const step = maxH > 6 ? 2 : 1;
+  let grid = '';
+  for(let h = step; h <= maxH; h += step) grid += `<div class="gl" style="bottom:${h / maxH * 100}%"><span>${h}h</span></div>`;
+  const cols = P.days.map((x, i) => {
+    const hi = x.high / 3600000 / maxH * 100, lo = (x.study - x.high) / 3600000 / maxH * 100;
+    return `<button class="col${dSel === i ? ' sel' : ''}" data-action="dcol" data-id="${i}" aria-label="${dateTxt(x.d)} 学习工作 ${durTxt(x.study)}">
+      ${x.high ? `<i style="height:${hi}%;background:var(--accent)"></i>` : ''}${x.study - x.high > 0 ? `<i style="height:${lo}%;background:color-mix(in srgb, var(--accent) 32%, var(--surface))"></i>` : ''}</button>`;
+  }).join('');
+  const xl = P.days.map((x, i) => {
+    const d = new Date(x.d);
+    const show = rangeN === 7 || i % (rangeN === 14 ? 2 : 5) === (rangeN - 1) % (rangeN === 14 ? 2 : 5);
+    return `<span>${show ? (rangeN === 7 ? WK[d.getDay()] : d.getDate()) : ''}</span>`;
+  }).join('');
+  let di = dSel; if(di == null){ di = P.days.length - 1; while(di > 0 && !P.days[di].tracked) di--; }
+  const ds = P.days[di];
+  const dRead = `<b>${dateTxt(ds.d)}</b>：学习工作 ${durTxt(ds.study)}，高专注 ${durTxt(ds.high)}${ds.focus ? `，平均专注 ${ds.focus.toFixed(1)}` : ''}`;
+  const dayChart = `<section><h2>每天学习工作多久 <small>点柱子看详情</small></h2><div class="chart">
+    <div class="legend"><span><i style="background:var(--accent)"></i>高专注</span><span><i style="background:color-mix(in srgb, var(--accent) 32%, var(--surface))"></i>其他学习工作</span></div>
+    <div class="plot">${grid}<div class="cols${dSel != null ? ' has-sel' : ''}">${cols}</div></div>
+    <div class="xl">${xl}</div><div class="readout">${dRead}</div></div></section>`;
+
+  // 一天中的时段
+  const maxM = Math.max(1, ...P.hours.map(h => h.ms));
+  const hcols = P.hours.map((h, i) => `<button class="col${hSel === i ? ' sel' : ''}" data-action="hcol" data-id="${i}" aria-label="${i} 点">
+    ${h.ms ? `<i style="height:${h.ms / maxM * 100}%;background:${shade(h.fw ? h.fs / h.fw : 0)}"></i>` : ''}</button>`).join('');
+  const hxl = P.hours.map((_, i) => `<span>${i % 6 === 0 ? i : ''}</span>`).join('');
+  let hi = hSel;
+  if(hi == null){ let m = 0; P.hours.forEach((h, i) => { if(h.ms > m){ m = h.ms; hi = i; } }); }
+  const hh = P.hours[hi];
+  const hRead = hh && hh.ms ? `<b>${hi}:00–${hi + 1}:00</b>：共学习 ${durTxt(hh.ms)}${hh.fw ? `，平均专注 ${(hh.fs / hh.fw).toFixed(1)}` : '，没评专注度'}` : '这个时段没有学习记录';
+  const hourChart = `<section><h2>一天中什么时候学习 <small>柱子高 = 时间，颜色深 = 专注</small></h2><div class="chart">
+    <div class="legend"><span>专注度 1<span class="ramp">${[1, 2, 3, 4, 5].map(f => `<i style="background:${shade(f)}"></i>`).join('')}</span>5</span><span><i style="background:var(--line)"></i>未评</span></div>
+    <div class="plot" style="margin-left:0"><div class="cols${hSel != null ? ' has-sel' : ''}" style="gap:2px">${hcols}</div></div>
+    <div class="xl" style="margin-left:0;gap:2px">${hxl}</div><div class="readout">${hRead}</div></div></section>`;
+
+  // 时间去哪了
+  const rows = Object.entries(P.acts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const mx = rows.length ? rows[0][1] : 1;
+  const where = `<section><h2>时间去哪了 <small>每天平均</small></h2>${rows.map(([id, ms]) => {
+    const a = actById(id);
+    return `<div class="tot"><span class="nm">${esc(a.name)}</span><span class="bar"><i style="width:${ms / mx * 100}%;background:${a.color}"></i></span><span>${durTxt(ms / P.logged)}</span></div>`;
+  }).join('')}</section>`;
+
+  // 分心原因
+  const rs = Object.entries(P.reasons).sort((a, b) => b[1] - a[1]);
+  const rmax = rs.length ? rs[0][1] : 1;
+  const reasons = rs.length ? `<section><h2>分心原因 <small>专注度 1–2 分时记下的</small></h2>${rs.map(([r, n]) =>
+    `<div class="reason"><span class="nm">${esc(r)}</span><span class="bar"><i style="width:${n / rmax * 100}%"></i></span><span>${n} 次</span></div>`).join('')}</section>` : '';
+
+  const ins = insights(P);
+  const insHtml = `<section><h2>发现</h2><ul class="insights">${ins.length ? ins.map(t => `<li>${t}</li>`).join('') : '<li>多记几天、记得给学习打专注分，这里会自动找出你的规律。</li>'}</ul></section>`;
+
+  el.innerHTML = range + hero + dayChart + hourChart + where + reasons + insHtml +
+    `<div class="actions"><button class="btn primary" data-action="copyPeriod">复制这段时间的复盘，发给 Claude</button></div>`;
+}
+
+function periodText(){
+  const today = sod(Date.now());
+  const P = periodStats(today, rangeN), Q = periodStats(addDays(today, -rangeN), rangeN);
+  const L = [`时间复盘：${isoDate(addDays(today, -rangeN + 1))} 到 ${isoDate(today)}（记录了 ${P.logged}/${rangeN} 天）`, ''];
+  L.push(`日均高专注学习 ${durTxt(P.avgHigh)}${Q.logged ? `（前 ${rangeN} 天 ${durTxt(Q.avgHigh)}）` : ''}`);
+  L.push(`日均学习工作 ${durTxt(P.avgStudy)}，平均专注度 ${P.focus ? P.focus.toFixed(1) : '未评'}`);
+  if(P.plansN) L.push(`计划完成 ${P.plansDone}/${P.plansN}，实际用时是预计的 ${(P.actual / Math.max(1, P.est)).toFixed(1)} 倍`);
+  L.push('', '每天：');
+  P.days.forEach(x => { if(x.tracked) L.push(`${isoDate(x.d)} 周${WK[new Date(x.d).getDay()]} | 学习工作 ${durTxt(x.study)} | 高专注 ${durTxt(x.high)} | 专注 ${x.focus ? x.focus.toFixed(1) : '-'}`); });
+  L.push('', '各时段学习（小时 | 时长 | 平均专注）：');
+  P.hours.forEach((h, i) => { if(h.ms >= 10 * 60000) L.push(`${i}点 | ${durTxt(h.ms)} | ${h.fw ? (h.fs / h.fw).toFixed(1) : '-'}`); });
+  L.push('', '每天平均：');
+  Object.entries(P.acts).sort((a, b) => b[1] - a[1]).forEach(([id, ms]) => L.push(`${actById(id).name} ${durTxt(ms / Math.max(1, P.logged))}`));
+  const rs = Object.entries(P.reasons);
+  if(rs.length){ L.push('', '分心原因：' + rs.sort((a, b) => b[1] - a[1]).map(([r, n]) => `${r} ${n}次`).join('，')); }
+  const B = blockStats(today, rangeN);
+  if(B) L.push('', `5 分钟冲刺：共 ${B.total} 块，平均每次连续 ${B.avg.toFixed(1)} 块，最长 ${B.max} 块`);
+  L.push('', '这段时间我的感受：', '下周想改进的：');
+  return L.join('\n');
+}
+async function copyPeriod(){
+  const t = periodText();
+  try{ if(!navigator.clipboard) throw 0; await navigator.clipboard.writeText(t); toast('已复制，粘贴发给 Claude 就行'); }
+  catch(e){
+    editing = {mode:'copy'};
+    openSheet(`<h3>复制这段复盘</h3><p class="sub">长按选中全部，复制后发给 Claude。</p>
+      <label class="field"><textarea id="fText" readonly>${esc(t)}</textarea></label>
+      <div class="row"><button class="btn primary" data-action="close">完成</button></div>`);
+    const ta = $('#fText'); ta.focus(); ta.select();
+  }
+}
+
+/* ============ 合并（多设备） ============ */
+function merge(a, b){
+  const tomb = {...(a.tomb || {})};
+  Object.entries(b.tomb || {}).forEach(([k, v]) => { tomb[k] = Math.max(tomb[k] || 0, v); });
+  const alive = it => !(tomb[it.id] >= (it.u || 0));
+  function list(x = [], y = []){
+    const m = new Map();
+    x.forEach(it => m.set(it.id, it));
+    y.forEach(it => { const o = m.get(it.id); if(!o || (it.u || 0) > (o.u || 0)) m.set(it.id, it); });
+    return [...m.values()].filter(alive);
+  }
+  const plans = {};
+  new Set([...Object.keys(a.plans || {}), ...Object.keys(b.plans || {})]).forEach(k => {
+    const l = list((a.plans || {})[k], (b.plans || {})[k]);
+    if(l.length) plans[k] = l;
+  });
+  const bNewer = (b.curU || 0) > (a.curU || 0);
+  return {
+    activities: list(a.activities, b.activities),
+    entries: list(a.entries, b.entries),
+    nodes: list(a.nodes, b.nodes),
+    plans, tomb,
+    current: bNewer ? (b.current || null) : (a.current || null),
+    curU: Math.max(a.curU || 0, b.curU || 0)
+  };
+}
+// 两台设备各自建了同名活动时，合成一个
+function dedupe(){
+  const byName = {};
+  S.activities.forEach(a => { (byName[a.name] = byName[a.name] || []).push(a); });
+  const remap = {};
+  Object.values(byName).forEach(g => {
+    if(g.length < 2) return;
+    g.sort((x, y) => (x.hidden - y.hidden) || (x.id < y.id ? -1 : 1));
+    g.slice(1).forEach(a => { remap[a.id] = g[0].id; });
+  });
+  if(!Object.keys(remap).length) return;
+  S.activities = S.activities.filter(a => !remap[a.id]);
+  S.entries.forEach(e => { if(remap[e.act]) e.act = remap[e.act]; });
+  Object.values(S.plans).forEach(l => l.forEach(p => { if(remap[p.act]) p.act = remap[p.act]; }));
+  if(S.current && remap[S.current.act]) S.current.act = remap[S.current.act];
+  S.nodes.forEach(n => { if(remap[n.course]) n.course = remap[n.course]; });
+}
+function stable(v){
+  if(Array.isArray(v)) return '[' + v.map(stable).join(',') + ']';
+  if(v && typeof v === 'object') return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + stable(v[k])).join(',') + '}';
+  return JSON.stringify(v === undefined ? null : v);
+}
+
+/* ============ 云同步（Supabase） ============ */
+const CFG = window.TT_CONFIG || {};
+let sb = null, user = null, syncing = false, again = false, pushT = null, lastSync = 0, syncState = 'off', syncErr = '';
+
+function setSync(st, msg){
+  syncState = st; syncErr = msg || '';
+  const b = $('#syncBtn'); b.className = 'syncbtn ' + st;
+  $('#syncTxt').textContent = {off:'仅本机', login:'未登录', busy:'同步中', ok:'已同步', offline:'离线', err:'同步失败'}[st];
+}
+function schedulePush(){ if(!sb || !user) return; clearTimeout(pushT); pushT = setTimeout(syncNow, 1500); }
+
+async function syncNow(){
+  if(!sb || !user) return;
+  if(syncing){ again = true; return; }
+  if(!navigator.onLine){ setSync('offline'); return; }
+  syncing = true; setSync('busy');
+  try{
+    const {data, error} = await sb.from('timelog').select('data').eq('user_id', user.id).maybeSingle();
+    if(error) throw error;
+    const remote = data ? data.data : null;
+    if(remote){
+      S = merge(S, remote);
+      rebuildSnap();
+      dedupe();
+    }
+    save(true);
+    if(!remote || stable(S) !== stable(remote)){
+      const {error: e2} = await sb.from('timelog').upsert({user_id: user.id, data: S, updated_at: new Date().toISOString()});
+      if(e2) throw e2;
+    }
+    lastSync = Date.now(); setSync('ok'); render();
+  }catch(e){
+    setSync('err', e && e.message ? e.message : String(e));
+  }finally{
+    syncing = false;
+    if(again){ again = false; setTimeout(syncNow, 300); }
+  }
+}
+
+async function initSync(){
+  if(!CFG.supabaseUrl || !CFG.supabaseKey || !window.supabase){ setSync('off'); return; }
+  try{
+    sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, {auth:{persistSession:true, autoRefreshToken:true}});
+    const {data} = await sb.auth.getSession();
+    user = data.session ? data.session.user : null;
+    sb.auth.onAuthStateChange((ev, s) => {
+      const was = user && user.id; user = s ? s.user : null;
+      if(user && user.id !== was) syncNow();
+      if(!user) setSync('login');
+    });
+    if(user) syncNow(); else setSync('login');
+  }catch(e){ setSync('err', e.message); }
+}
+window.addEventListener('online', () => syncNow());
+setInterval(() => { if(!document.hidden) syncNow(); }, 60000);
+
+function openAccount(){
+  editing = {mode:'account'};
+  if(!sb){
+    openSheet(`<h3>云同步还没打开</h3><p class="sub">现在记录只存在这台设备上。按安装说明在 Supabase 建好数据库，把网址和 key 填进仓库里的 <code class="inline">config.js</code>，刷新后这里就能登录。</p>
+      <div class="row"><button class="btn primary" data-action="close">知道了</button></div>`);
+    return;
+  }
+  if(!user){
+    openSheet(`<h3>登录同步账号</h3><p class="sub">手机和电脑用同一个邮箱和密码登录，记录就会自动同步。第一次用先点「注册」。</p>
+      <label class="field">邮箱<input id="fEmail" type="email" autocomplete="email" inputmode="email"></label>
+      <label class="field">密码（至少 6 位）<input id="fPass" type="password" autocomplete="current-password"></label>
+      <p class="auth-err" id="authErr"></p>
+      <div class="row"><button class="btn" data-action="signup">注册</button><button class="btn primary" data-action="login">登录</button></div>`);
+    return;
+  }
+  const st = syncState === 'err' ? `上次同步失败：${esc(syncErr)}` : lastSync ? `上次同步 ${hm(lastSync)}` : '还没同步过';
+  openSheet(`<h3>云同步已开启</h3><p class="sub">${esc(user.email || '')}<br>${st}</p>
+    <div class="row"><button class="btn" data-action="logout">退出登录</button><button class="btn primary" data-action="syncNow">立即同步</button></div>`);
+}
+async function authDo(kind){
+  const email = $('#fEmail').value.trim(), password = $('#fPass').value;
+  const err = $('#authErr');
+  if(!email || password.length < 6){ err.textContent = '请填邮箱和至少 6 位的密码'; return; }
+  err.textContent = kind === 'in' ? '登录中…' : '注册中…';
+  const fn = kind === 'in' ? sb.auth.signInWithPassword({email, password}) : sb.auth.signUp({email, password});
+  const {data, error} = await fn;
+  if(error){
+    const m = error.message || '';
+    err.textContent = /Invalid login/i.test(m) ? '邮箱或密码不对' : /already registered/i.test(m) ? '这个邮箱已经注册过，直接点「登录」' : /confirm/i.test(m) ? '邮箱还没确认：去邮箱点确认链接，或在 Supabase 关掉邮箱确认（见安装说明）' : m;
+    return;
+  }
+  if(kind === 'up' && !data.session){ err.textContent = '注册成功，去邮箱点确认链接后再登录'; return; }
+  closeSheet(); toast('已登录，正在同步');
+}
+
+/* ============ 自动切换链接（给快捷指令用） ============ */
+function handleUrl(){
+  const q = new URLSearchParams(location.search);
+  const name = q.get('start');
+  if(name){
+    const a = S.activities.find(x => !x.hidden && x.name === name);
+    if(a){ if(!S.current || S.current.act !== a.id) switchTo(a.id); toast('已开始「' + name + '」'); }
+    else toast('找不到活动「' + name + '」');
+  }else if(q.has('stop') && S.current){ stop(); }
+  if(location.search) history.replaceState(null, '', location.pathname);
+}
+
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+
+/* ============ 5 分钟冲刺 ============ */
+let audioCtx = null;
+function beep(){
+  try{
+    if(!audioCtx) return;
+    [0, 0.25].forEach(d => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.frequency.value = 880; o.connect(g); g.connect(audioCtx.destination);
+      const t = audioCtx.currentTime + d;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.3, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      o.start(t); o.stop(t + 0.22);
+    });
+  }catch(e){}
+  try{ navigator.vibrate && navigator.vibrate([200, 100, 200]); }catch(e){}
+}
+function sprintRow(){
+  const c = S.current, n = c.blocks || 0;
+  const done = n ? `<span class="blocks" aria-label="已完成 ${n} 块">${'<i></i>'.repeat(Math.min(n, 24))}</span>${n > 24 ? ` ${n}` : ''}` : '';
+  if(c.sprint){
+    return `<div class="sprint"><span class="sp-t"><b id="spLeft">${clock(c.sprint - Date.now()).replace(/^0:/, '')}</b>这 5 分钟只做这一件事${done}</span>
+      <button class="link" data-action="sprintStop">放弃这块</button></div>`;
+  }
+  return `<div class="sprint"><span class="sp-t">${n ? `已完成 ${n} 块` : '坚持不了太久？只做 5 分钟'}${done}</span>
+    <button class="btn primary" data-action="sprint">开始 5 分钟冲刺</button></div>`;
+}
+function sprintStart(){
+  if(!S.current) return;
+  try{ if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); if(audioCtx.state === 'suspended') audioCtx.resume(); }catch(e){}
+  S.current.sprint = Date.now() + 5 * 60000;
+  save(); render();
+}
+function sprintDone(){
+  const c = S.current; if(!c || !c.sprint) return;
+  c.sprint = null; c.blocks = (c.blocks || 0) + 1;
+  save(); render(); beep();
+  editing = {mode:'sprint'};
+  const n = c.blocks;
+  openSheet(`<h3>完成第 ${n} 块</h3><p class="sub">这一段已经连续专注 ${n * 5} 分钟。${n >= 3 ? '状态不错，' : ''}要再来 5 分钟吗？</p>
+    <div class="row"><button class="btn" data-action="sprintRest">休息一下</button><button class="btn primary" data-action="sprintAgain">再来 5 分钟</button></div>`);
+}
+function blockStats(endDay, n){
+  const s = addDays(endDay, -n + 1), e = addDays(endDay, 1);
+  const runs = S.entries.filter(x => x.blocks && x.start >= s && x.start < e).map(x => x.blocks);
+  if(S.current && S.current.blocks && S.current.start >= s) runs.push(S.current.blocks);
+  if(!runs.length) return null;
+  return {avg: runs.reduce((a, b) => a + b, 0) / runs.length, max: Math.max(...runs), total: runs.reduce((a, b) => a + b, 0), count: runs.length};
+}
+
+/* ============ 学习：知识树 ============ */
+const MASTER = ['没学', '看过', '能讲出来', '会用'];
+let learnCourse = null;
+
+function courses(){ return S.activities.filter(a => !a.hidden && a.rate); }
+function nodesOf(c){ return S.nodes.filter(n => n.course === c); }
+function kids(c, p){ return nodesOf(c).filter(n => (n.parent || null) === p); }
+function nextNode(c){
+  // 先树干，后树叶：一层一层往下找第一个还没「能讲出来」的
+  let layer = kids(c, null);
+  while(layer.length){
+    const n = layer.find(x => (x.m || 0) < 2);
+    if(n) return n;
+    layer = layer.flatMap(x => kids(c, x.id));
+  }
+  return null;
+}
+function pathOf(n){
+  const out = [];
+  let p = n;
+  while(p){ out.unshift(p.text); p = S.nodes.find(x => x.id === p.parent); }
+  return out.join(' › ');
+}
+
+function renderLearn(){
+  const cs = courses();
+  if(!learnCourse || !cs.some(c => c.id === learnCourse)) learnCourse = cs[0] ? cs[0].id : null;
+  const el = $('#learnView');
+  if(!learnCourse){ el.innerHTML = `<div class="empty">先在「记录」页加一个学习类活动（结束时问专注度的那种），这里就能给它建知识树。</div>`; return; }
+  const all = nodesOf(learnCourse);
+  const done = all.filter(n => (n.m || 0) >= 2).length;
+  const nx = nextNode(learnCourse);
+
+  const tip = `<div class="hero" style="padding:14px 16px"><div class="label">学习方法</div>
+    <p style="margin:6px 0 0;font-size:14px">先把一门课当成一棵树：<b>树干</b>是最核心的几个概念，<b>树枝和树叶</b>是公式、例题和细节。树干懂了，细节才有地方挂。卡住的时候问自己：这个概念最基本的定义是什么？它要解决什么问题？</p></div>`;
+
+  const sel = `<label class="field" style="margin:14px 0 8px">课程<select id="fCourse">${cs.map(c => `<option value="${c.id}"${c.id === learnCourse ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>`;
+
+  const prog = all.length ? `<div class="tot" style="grid-template-columns:auto 1fr auto"><span>掌握</span><span class="bar"><i style="width:${done / all.length * 100}%;background:var(--accent)"></i></span><span>${done}/${all.length}</span></div>` : '';
+  const next = nx ? `<div class="summary"><b>下一步学：</b>${esc(pathOf(nx))}<br><span style="color:var(--muted)">现在是「${MASTER[nx.m || 0]}」，目标是能用自己的话讲出来。</span></div>`
+    : all.length ? `<div class="summary">这棵树的所有点你都能讲出来了。可以往下加更细的知识点，或者把树复制给 Claude 让它出题考你。</div>` : '';
+
+  function branch(p, depth){
+    return kids(learnCourse, p).map(n => `<li>
+      <div class="node" style="padding-left:${12 + depth * 18}px">
+        <button class="mpill m${n.m || 0}" data-action="cycleM" data-id="${n.id}" aria-label="掌握程度：${MASTER[n.m || 0]}，点一下升一级">${MASTER[n.m || 0]}</button>
+        <button class="ntext${depth === 0 ? ' trunk' : ''}" data-action="editNode" data-id="${n.id}">${esc(n.text)}</button>
+        <button class="link" data-action="addNode" data-id="${n.id}" aria-label="在「${esc(n.text)}」下面加细节">＋</button>
+      </div>${branch(n.id, depth + 1)}</li>`).join('');
+  }
+  const tree = all.length ? `<ul class="tree">${branch(null, 0)}</ul>`
+    : `<div class="empty" style="background:var(--surface);border-radius:12px">还没有知识点。先加 3–5 个这门课最核心的概念当树干，比如看课程大纲每周的标题。</div>`;
+
+  el.innerHTML = tip + sel + prog + next +
+    `<section><h2>知识树 <small>点左边的标签升一级</small></h2>${tree}</section>
+     <div class="actions"><button class="btn" data-action="addNode" data-id="">＋ 加核心概念</button><button class="btn primary" data-action="copyTree">复制给 Claude 出题</button></div>`;
+}
+
+function openNode(id, parent){
+  const n = id ? S.nodes.find(x => x.id === id) : null;
+  const par = parent ? S.nodes.find(x => x.id === parent) : null;
+  editing = {mode:'node', id: n ? n.id : null, parent: n ? n.parent : (parent || null)};
+  const title = n ? '修改知识点' : par ? `在「${esc(par.text)}」下面加细节` : '加核心概念（树干）';
+  openSheet(`<h3>${title}</h3>
+    <label class="field">内容<input id="fNode" maxlength="80" placeholder="${par ? '比如：一个公式、一类题型' : '比如：Linear regression'}" value="${n ? esc(n.text) : ''}"></label>
+    ${n ? `<label class="field">掌握程度<select id="fM">${MASTER.map((m, i) => `<option value="${i}"${(n.m || 0) === i ? ' selected' : ''}>${m}</option>`).join('')}</select></label>` : ''}
+    <div class="row">${n ? '<button class="btn danger" data-action="delNode">删除</button>' : ''}<button class="btn" data-action="close">取消</button><button class="btn primary" data-action="saveNode">${n ? '保存' : '添加'}</button></div>`);
+}
+function saveNode(){
+  const text = $('#fNode').value.trim();
+  if(!text){ toast('请写点内容'); return; }
+  if(editing.id){
+    const n = S.nodes.find(x => x.id === editing.id);
+    n.text = text; n.m = Number($('#fM').value);
+  }else S.nodes.push({id:uid(), course:learnCourse, parent:editing.parent, text, m:0});
+  save(); closeSheet(); render();
+}
+function delNode(){
+  const gone = new Set([editing.id]);
+  let grew = true;
+  while(grew){ grew = false; S.nodes.forEach(n => { if(n.parent && gone.has(n.parent) && !gone.has(n.id)){ gone.add(n.id); grew = true; } }); }
+  S.nodes = S.nodes.filter(n => !gone.has(n.id));
+  save(); closeSheet(); render(); toast(gone.size > 1 ? `已删除（连同下面 ${gone.size - 1} 个细节）` : '已删除');
+}
+function cycleM(id){
+  const n = S.nodes.find(x => x.id === id); if(!n) return;
+  n.m = ((n.m || 0) + 1) % 4; save(); render();
+}
+async function copyTree(){
+  const c = actById(learnCourse);
+  const L = [`这是我「${c.name}」这门课的知识树（括号里是我自己评的掌握程度）。请按「先树干后树叶」的顺序，挑我还没到「会用」的点出 5 道题考我，一次一道，我答完你再出下一道。`, ''];
+  (function walk(p, d){ kids(learnCourse, p).forEach(n => { L.push(`${'  '.repeat(d)}- ${n.text}（${MASTER[n.m || 0]}）`); walk(n.id, d + 1); }); })(null, 0);
+  const t = L.join('\n');
+  try{ if(!navigator.clipboard) throw 0; await navigator.clipboard.writeText(t); toast('已复制，粘贴发给 Claude'); }
+  catch(e){
+    editing = {mode:'copy'};
+    openSheet(`<h3>复制知识树</h3><label class="field"><textarea id="fText" readonly>${esc(t)}</textarea></label><div class="row"><button class="btn primary" data-action="close">完成</button></div>`);
+    const ta = $('#fText'); ta.focus(); ta.select();
+  }
+}
+document.addEventListener('change', e => { if(e.target.id === 'fCourse'){ learnCourse = e.target.value; renderLearn(); } });
+
+render();
+handleUrl();
+initSync();
+
+</script>
+</body>
+</html>
