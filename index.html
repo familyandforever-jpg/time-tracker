@@ -207,6 +207,12 @@ textarea{min-height:240px;font-size:14px;resize:vertical}
 .ntext.trunk{font-weight:700}
 .sprint{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
 .sprint .sp-t{font-size:15px}
+.goal{font-size:15px;overflow-wrap:anywhere}
+.tbox{font-size:14px;color:var(--muted);margin-top:4px}
+.tbox.over{color:var(--danger);font-weight:700}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}
+.chips button{border:1px solid var(--line);background:var(--bg);border-radius:999px;padding:0 14px;min-height:40px;cursor:pointer;font-size:14px}
+.chips button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
 .lensel{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin-left:4px;min-height:40px}
 .sprint .sp-t b{font-family:"Barlow Condensed","Roboto Condensed","Arial Narrow",sans-serif;font-size:24px;font-variant-numeric:tabular-nums;margin-right:4px}
 .blocks{display:inline-flex;gap:3px;vertical-align:middle;margin-left:6px;flex-wrap:wrap}
@@ -391,7 +397,7 @@ let view = sod(Date.now());
 function dayItems(d){
   const e = addDays(d,1), now = Date.now();
   const items = S.entries.filter(x => x.start < e && x.end > d).map(x => ({...x, live:false}));
-  if(S.current && S.current.start < e && now > d) items.push({id:'__live', act:S.current.act, start:S.current.start, end:now, focus:null, note:S.current.note||'', live:true, runs:S.current.runs, blocks:S.current.blocks});
+  if(S.current && S.current.start < e && now > d) items.push({id:'__live', act:S.current.act, start:S.current.start, end:now, focus:null, note:S.current.note||'', goal:S.current.goal||'', live:true, runs:S.current.runs, blocks:S.current.blocks});
   return items.sort((a,b) => a.start - b.start);
 }
 function actualFor(act, d){ return dayItems(d).filter(x => x.act === act).reduce((s,x) => s + clip(x, d), 0); }
@@ -413,7 +419,8 @@ function render(){
   if(S.current){
     const a = actById(S.current.act);
     nowEl.style.setProperty('--nowc', a.color);
-    nowEl.innerHTML = `<div class="label">正在进行</div><div class="act">${esc(a.name)}</div>${S.current.note ? `<div class="note">${esc(S.current.note)}</div>` : ''}
+    nowEl.innerHTML = `<div class="label">正在进行</div><div class="act">${esc(a.name)}</div>${S.current.goal ? `<div class="goal">目标：${esc(S.current.goal)}</div>` : ''}${S.current.note ? `<div class="note">${esc(S.current.note)}</div>` : ''}
+      ${S.current.est ? `<div class="tbox" id="tbox">${tboxTxt()}</div>` : ''}
       <div class="timer" id="timer">${clock(Date.now() - S.current.start)}</div>
       <div class="row"><span class="since">从 ${hm(S.current.start)} 开始</span>
       <span class="btns"><button class="btn" data-action="editCurrent">修改 / 备注</button><button class="btn primary" data-action="stop">结束</button></span></div>${a.rate ? sprintRow() : ''}`;
@@ -477,12 +484,13 @@ function render(){
       const en = it.live ? '现在' : hm(it.end) + (it.end > e ? '+1' : '');
       let f = it.focus ? `专注 ${it.focus} · ${FOCUS[it.focus-1]}${it.reason ? ' · ' + esc(it.reason) : ''}` : (a.rate && !it.live ? '未评专注度' : '');
       const bl = it.live ? (S.current.blocks || 0) : (it.blocks || 0);
+      if(it.est && !it.live) f = (f ? f + ' · ' : '') + taskTag(it);
       const sk = streaksOf(it);
       if(it.runs && it.runs.length && sk.length) f = (f ? f + ' · ' : '') + `最长连续专注 ${Math.max(...sk)} 分`;
       else if(bl) f = (f ? f + ' · ' : '') + `5 分钟块 ×${bl}`;
       return `<li><button class="entry" data-action="${it.live ? 'editCurrent' : 'entry'}" data-id="${it.id}">
         <span class="t">${st}–${en}</span>
-        <span class="n"><span class="dot" style="background:${a.color}"></span><span class="nm">${esc(a.name)}${it.note ? `<span class="note">${esc(it.note)}</span>` : ''}</span></span>
+        <span class="n"><span class="dot" style="background:${a.color}"></span><span class="nm">${esc(a.name)}${it.goal ? `<span class="note">${esc(it.goal)}</span>` : ''}${it.note ? `<span class="note">${esc(it.note)}</span>` : ''}</span></span>
         <span class="d">${durTxt(it.end - it.start)}${f ? `<span class="f">${f}</span>` : ''}</span></button></li>`;
     }).join('');
   }
@@ -507,6 +515,7 @@ function render(){
 function tick(){
   const t = $('#timer');
   if(t && S.current) t.textContent = clock(Date.now() - S.current.start);
+  if(S.current && S.current.est){ taskTick(); if(!S.current) return; }
   if(S.current && S.current.sprint){
     const left = S.current.sprint - Date.now();
     if(left <= 0) sprintDone();
@@ -531,16 +540,19 @@ function endCurrent(endT){
   if(c.sprint) pushRun(c, Math.min(end, c.sprint), end >= c.sprint ? null : 'cut');
   S.current = null;
   if(end - c.start < 60000){ toast('不到 1 分钟，这段没有记下'); return null; }
-  const en = {id:uid(), act:c.act, start:c.start, end, focus:null, note:c.note||''};
+  const en = {id: c.capped ? 'cap-' + c.start : uid(), act:c.act, start:c.start, end, focus:null, note:c.note||''};
+  if(c.est){ en.est = c.est; en.goal = c.goal || ''; en.done = c.done == null ? null : c.done; if(c.capped) en.capped = true; }
   if(c.blocks) en.blocks = c.blocks;
   if(c.runs && c.runs.length) en.runs = c.runs.filter(r => r.s < end);
   S.entries.push(en);
   return en;
 }
-function switchTo(id){
+function switchTo(id, task){
   if(S.current && S.current.act === id){ toast('已经在记录这一项'); return; }
+  if(actById(id).rate && !task){ openTask(id); return; }
   const prev = endCurrent();
   S.current = {act:id, start:Date.now(), note:''};
+  if(task){ S.current.goal = task.goal; S.current.est = task.est; S.current.cap = S.current.start + task.est * 2 * 60000; }
   save(); view = sod(Date.now()); render();
   if(prev && actById(prev.act).rate) openRate(prev.id);
 }
@@ -690,6 +702,8 @@ function openCurrent(){
     <p class="sub">可以加备注，或者把开始时间往前调（比如 14:00 就开始了，14:20 才想起来点）。</p>
     <label class="field">活动<select id="fAct">${actOptions(S.current.act)}</select></label>
     <label class="field">开始<input id="fStart" type="time" value="${hm(S.current.start)}"></label>
+    ${S.current.est ? `<label class="field">要完成什么<input id="fGoal" maxlength="40" value="${esc(S.current.goal||'')}"></label>
+    <label class="field">预计时间（最多做到 2 倍就自动结束）<select id="fEst">${estOpts(S.current.est)}</select></label>` : ''}
     <label class="field">备注（可不填）<input id="fNote" maxlength="60" placeholder="比如：洗头" value="${esc(S.current.note||'')}"></label>
     <div class="row"><button class="btn" data-action="close">取消</button><button class="btn primary" data-action="saveCurrent">保存</button></div>`);
 }
@@ -698,6 +712,12 @@ function saveCurrent(){
   let start = at(sod(Date.now()), fs);
   if(start > Date.now()) start = at(addDays(sod(Date.now()), -1), fs);
   S.current = {...S.current, act:$('#fAct').value, start, note:$('#fNote').value.trim()};
+  if($('#fEst')){
+    const est = Number($('#fEst').value);
+    S.current.goal = $('#fGoal').value.trim(); S.current.est = est;
+    S.current.cap = start + est * 2 * 60000;
+    if(Date.now() < start + est * 60000) S.current.estAsked = false;
+  }
   save(); closeSheet(); render(); toast('已保存');
 }
 
@@ -745,7 +765,8 @@ function buildText(){
     const sk = streaksOf(it);
     if(it.runs && it.runs.length && sk.length) f += ` | 最长连续专注${Math.max(...sk)}分`;
     else if(bl) f += ` | 5分钟块×${bl}`;
-    lines.push(`${hm(it.start)}-${it.live ? '进行中' : hm(it.end)} | ${a.name}${it.note ? `（${it.note}）` : ''} | ${durTxt(it.end - it.start)} | ${f}`);
+    if(it.est && !it.live) f += ` | ${taskTag(it)}`;
+    lines.push(`${hm(it.start)}-${it.live ? '进行中' : hm(it.end)} | ${a.name}${it.goal ? `：${it.goal}` : ''}${it.note ? `（${it.note}）` : ''} | ${durTxt(it.end - it.start)} | ${f}`);
   });
   const tot = {}; let all = 0, high = 0;
   items.forEach(it => { const c = clip(it, view); tot[it.act] = (tot[it.act]||0) + c; if(actById(it.act).rate){ all += c; if(it.focus >= 4) high += c; } });
@@ -827,6 +848,11 @@ document.addEventListener('click', e => {
     case 'useLen': setFocusLen(Number(id)); render(); toast('专注时长改成 ' + id + ' 分钟'); break;
     case 'stillYes': if(S.current){ S.current.ck = Date.now(); save(); } closeSheet(); render(); toast('好，继续加油'); break;
     case 'stillNo': stillNo(); break;
+    case 'est': { document.querySelectorAll('.chips button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.id === id))); break; }
+    case 'taskGo': taskGo(); break;
+    case 'taskDone': taskEnd(true); break;
+    case 'taskMore': if(S.current){ S.current.estAsked = true; save(); } closeSheet(); render(); toast('最晚 ' + hm(S.current.cap) + ' 自动结束'); break;
+    case 'taskStop': taskEnd(false); break;
     case 'sprintAgain': closeSheet(); sprintStart(); break;
     case 'sprintRest': { closeSheet(); const r = S.activities.find(a => a.name === '休息' && !a.hidden); if(r) switchTo(r.id); break; }
     case 'cycleM': cycleM(id); break;
@@ -1041,10 +1067,21 @@ function renderDash(){
       <div class="chart"><div class="plot" style="height:110px">${fl <= mx ? `<div class="gl" style="bottom:${fl / mx * 100}%"><span>${fl}</span></div>` : ''}<div class="cols">${fcols}</div></div><div class="xl">${fxl}</div>
       <div class="readout">虚线是你现在设的专注时长（${fl} 分钟）。到点自评：全程专注 ${B.q.full} 次 · 拉回来 ${B.q.back} 次 · 走神 ${B.q.lost} 次 · 放弃 ${B.q.quit} 次</div></div></section>`;
   }
+  const T = taskStats(today, rangeN);
+  let taskSec = '';
+  if(T){
+    const pct = n => Math.round(n / T.n * 100) + '%';
+    taskSec = `<section><h2>时间感知 <small>开始前的预计 vs 实际</small></h2>
+      <div class="stats" style="margin:0 0 8px"><div class="stat"><b>${T.ratio.toFixed(1)}<small style="font-size:12px;font-weight:400"> 倍</small></b><span>实际 ÷ 预计</span></div>
+      <div class="stat"><b>${pct(T.onTime)}</b><span>预计时间内做完</span></div>
+      <div class="stat"><b>${T.capped}</b><span>到 2 倍被自动结束</span></div></div>
+      <ul class="insights">${T.recent.map(e => `<li>${esc(actById(e.act).name)}${e.goal ? '：' + esc(e.goal) : ''}<br><small style="color:var(--muted)">${dateTxt(e.start)} · ${taskTag(e)}</small></li>`).join('')}</ul>
+      <p class="hint">目标是让「实际 ÷ 预计」越来越接近 1.0，说明你对时间的感觉越来越准。</p></section>`;
+  }
   const ins = insights(P);
   const insHtml = `<section><h2>发现</h2><ul class="insights">${ins.length ? ins.map(t => `<li>${t}</li>`).join('') : '<li>多记几天、记得给学习打专注分，这里会自动找出你的规律。</li>'}</ul></section>`;
 
-  el.innerHTML = range + hero + focusSec + dayChart + hourChart + where + reasons + insHtml +
+  el.innerHTML = range + hero + taskSec + focusSec + dayChart + hourChart + where + reasons + insHtml +
     `<div class="actions"><button class="btn primary" data-action="copyPeriod">复制这段时间的复盘，发给 Claude</button></div>`;
 }
 
@@ -1068,6 +1105,11 @@ function periodText(){
     L.push('', `专注计时：共 ${B.count} 次，专注 ${durTxt(B.total * 60000)}；每天最长连续专注平均 ${Math.round(B.avg)} 分钟，最长 ${B.max} 分钟`);
     L.push(`到点自评：全程专注 ${B.q.full} 次，走神但拉回 ${B.q.back} 次，大部分走神 ${B.q.lost} 次，中途放弃 ${B.q.quit} 次`);
     L.push('每天最长连续专注：' + B.days.map(x => `${new Date(x.d).getMonth() + 1}/${new Date(x.d).getDate()} ${x.best}分`).join('，'));
+  }
+  const T = taskStats(today, rangeN);
+  if(T){
+    L.push('', `时间感知：共 ${T.n} 个任务，实际平均是预计的 ${T.ratio.toFixed(1)} 倍；预计时间内做完 ${T.onTime} 个，超时做完 ${T.late} 个，没做完 ${T.undone} 个，到 2 倍被自动结束 ${T.capped} 个`);
+    T.all.forEach(e => L.push(`${isoDate(e.start)} ${actById(e.act).name}${e.goal ? '：' + e.goal : ''} | ${taskTag(e)}`));
   }
   L.push('', '这段时间我的感受：', '下周想改进的：');
   return L.join('\n');
@@ -1241,6 +1283,93 @@ function handleUrl(){
 
 if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
+/* ============ 时间盒：开始前预计，最多做到 2 倍 ============ */
+const TASK_ESTS = [15, 30, 45, 60, 90, 120];
+function estOpts(sel){ return ESTS.map(m => `<option value="${m}"${m === sel ? ' selected' : ''}>${durTxt(m * 60000)}</option>`).join(''); }
+function openTask(id){
+  const a = actById(id);
+  const plan = (S.plans[isoDate(sod(Date.now()))] || []).find(p => p.act === id && !p.done);
+  const est = plan ? plan.est : 60;
+  editing = {mode:'task', id, plan: plan ? plan.id : null};
+  const chips = [...new Set([...TASK_ESTS, est])].sort((x, y) => x - y);
+  openSheet(`<h3>开始「${esc(a.name)}」</h3>
+    <p class="sub">先想好这次要做完什么、要多久。到预计时间会问你做完没有，最多做到 2 倍就自动结束。</p>
+    <label class="field">这次要做完什么<input id="fGoal" maxlength="40" placeholder="比如：做完 tutorial 第 3 题" value="${plan && plan.text ? esc(plan.text) : ''}"></label>
+    <div class="field" style="margin-bottom:0">预计多久</div>
+    <div class="chips" role="group" aria-label="预计时间">${chips.map(m => `<button data-action="est" data-id="${m}" aria-pressed="${m === est}">${durTxt(m * 60000)}</button>`).join('')}</div>
+    <div class="row"><button class="btn" data-action="close">取消</button><button class="btn primary" data-action="taskGo">开始</button></div>`);
+}
+function taskGo(){
+  const b = document.querySelector('.chips button[aria-pressed="true"]');
+  const est = b ? Number(b.dataset.id) : 60;
+  const goal = $('#fGoal').value.trim();
+  const id = editing.id; closeSheet();
+  switchTo(id, {goal, est});
+  toast(`预计 ${durTxt(est * 60000)}，最晚 ${hm(S.current.cap)} 自动结束`);
+}
+function tboxTxt(){
+  const c = S.current, now = Date.now(), due = c.start + c.est * 60000;
+  if(now < due) return `预计 ${durTxt(c.est * 60000)} · 还剩 ${clock(due - now).replace(/^0:/, '')}`;
+  return `已超出预计 ${durTxt(now - due)} · 最晚 ${hm(c.cap)} 自动结束`;
+}
+function taskTick(){
+  const c = S.current, now = Date.now();
+  if(now >= c.cap){ taskCap(); return; }
+  const el = $('#tbox');
+  if(el){ el.textContent = tboxTxt(); el.classList.toggle('over', now >= c.start + c.est * 60000); }
+  if(!c.estAsked && now >= c.start + c.est * 60000 && !$('#ov').classList.contains('open')){
+    c.estAsked = true; save(); beep();
+    editing = {mode:'due'};
+    openSheet(`<h3>预计的 ${durTxt(c.est * 60000)} 到了</h3>
+      <p class="sub">${c.goal ? '「' + esc(c.goal) + '」' : '这件事'}做完了吗？</p>
+      <div class="reasons" style="grid-template-columns:1fr">
+        <button data-action="taskDone">做完了，结束</button>
+        <button data-action="taskMore">还差一点，继续（最晚 ${hm(c.cap)}）</button>
+        <button data-action="taskStop">没做完，先停下</button></div>`);
+  }
+}
+function taskEnd(done){
+  if(!S.current) { closeSheet(); return; }
+  S.current.done = done;
+  if(done) markPlan(S.current.act);
+  closeSheet(); stop();
+}
+function markPlan(act){
+  const p = (S.plans[isoDate(sod(Date.now()))] || []).find(x => x.act === act && !x.done);
+  if(p) p.done = true;
+}
+// 到 2 倍：在上限那一刻结束，哪怕你已经离开很久
+function taskCap(){
+  const c = S.current; if(!c) return;
+  c.capped = true; if(c.done == null) c.done = false;
+  const en = endCurrent(c.cap); save(); render(); beep();
+  if(!en) return;
+  editing = {mode:'rate', id: en.id};
+  openSheet(`<h3>已在 ${hm(en.end)} 自动结束</h3>
+    <p class="sub">「${esc(actById(en.act).name)}」预计 ${durTxt(en.est * 60000)}，到 2 倍上限就停了。如果之后其实还在做，可以「补记一条」。</p>
+    <p class="sub" style="margin-top:10px">这段的专注度怎么样？</p>
+    <div class="rate">${FOCUS.map((l, i) => `<button data-action="rate" data-id="${i + 1}"><b>${i + 1}</b><span>${l}</span></button>`).join('')}</div>
+    <button class="link" data-action="close">先跳过</button>`);
+}
+function taskTag(e){
+  const act = Math.round((e.end - e.start) / 60000), r = act / e.est;
+  const st = e.capped ? '到上限自动结束' : e.done === true ? (r <= 1.1 ? '按时做完' : '超时做完') : e.done === false ? '没做完' : '';
+  return `预计 ${durTxt(e.est * 60000)} · 实际 ${durTxt(act * 60000)}（${r.toFixed(1)} 倍）${st ? ' · ' + st : ''}`;
+}
+function taskStats(endDay, n){
+  const s = addDays(endDay, -n + 1), e = addDays(endDay, 1);
+  const all = S.entries.filter(x => x.est && x.start >= s && x.start < e).sort((a, b) => a.start - b.start);
+  if(!all.length) return null;
+  const r = x => (x.end - x.start) / 60000 / x.est;
+  return {all, n: all.length,
+    ratio: all.reduce((t, x) => t + r(x), 0) / all.length,
+    onTime: all.filter(x => x.done === true && r(x) <= 1.1).length,
+    late: all.filter(x => x.done === true && r(x) > 1.1).length,
+    undone: all.filter(x => x.done !== true).length,
+    capped: all.filter(x => x.capped).length,
+    recent: all.slice(-6).reverse()};
+}
+
 /* ============ 专注计时（时长可调，练长时间专注） ============ */
 const LENS = [5,10,15,20,25,30,35,40,45,50,60,75,90,120];
 const STILL = 90;          // 分钟：学习类活动没在专注计时、又超过这么久没确认，就问一句「还在做吗」
@@ -1369,7 +1498,7 @@ function answerCheck(q){
 // 忘记结束：学习类活动超过 STILL 分钟没确认，就问一句
 function checkStill(){
   const c = S.current;
-  if(!c || c.sprint || $('#ov').classList.contains('open') || Date.now() - lastAsk < 10 * 60000) return;
+  if(!c || c.est || c.sprint || $('#ov').classList.contains('open') || Date.now() - lastAsk < 10 * 60000) return;
   if(!actById(c.act).rate) return;
   const since = c.ck || c.start;
   if(Date.now() - since < STILL * 60000) return;
