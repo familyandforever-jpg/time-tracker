@@ -207,6 +207,7 @@ textarea{min-height:240px;font-size:14px;resize:vertical}
 .ntext.trunk{font-weight:700}
 .sprint{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
 .sprint .sp-t{font-size:15px}
+.lensel{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin-left:4px;min-height:40px}
 .sprint .sp-t b{font-family:"Barlow Condensed","Roboto Condensed","Arial Narrow",sans-serif;font-size:24px;font-variant-numeric:tabular-nums;margin-right:4px}
 .blocks{display:inline-flex;gap:3px;vertical-align:middle;margin-left:6px;flex-wrap:wrap}
 .blocks i{width:10px;height:10px;border-radius:2px;background:var(--accent)}
@@ -390,7 +391,7 @@ let view = sod(Date.now());
 function dayItems(d){
   const e = addDays(d,1), now = Date.now();
   const items = S.entries.filter(x => x.start < e && x.end > d).map(x => ({...x, live:false}));
-  if(S.current && S.current.start < e && now > d) items.push({id:'__live', act:S.current.act, start:S.current.start, end:now, focus:null, note:S.current.note||'', live:true});
+  if(S.current && S.current.start < e && now > d) items.push({id:'__live', act:S.current.act, start:S.current.start, end:now, focus:null, note:S.current.note||'', live:true, runs:S.current.runs, blocks:S.current.blocks});
   return items.sort((a,b) => a.start - b.start);
 }
 function actualFor(act, d){ return dayItems(d).filter(x => x.act === act).reduce((s,x) => s + clip(x, d), 0); }
@@ -476,7 +477,9 @@ function render(){
       const en = it.live ? '现在' : hm(it.end) + (it.end > e ? '+1' : '');
       let f = it.focus ? `专注 ${it.focus} · ${FOCUS[it.focus-1]}${it.reason ? ' · ' + esc(it.reason) : ''}` : (a.rate && !it.live ? '未评专注度' : '');
       const bl = it.live ? (S.current.blocks || 0) : (it.blocks || 0);
-      if(bl) f = (f ? f + ' · ' : '') + `5 分钟块 ×${bl}`;
+      const sk = streaksOf(it);
+      if(it.runs && it.runs.length && sk.length) f = (f ? f + ' · ' : '') + `最长连续专注 ${Math.max(...sk)} 分`;
+      else if(bl) f = (f ? f + ' · ' : '') + `5 分钟块 ×${bl}`;
       return `<li><button class="entry" data-action="${it.live ? 'editCurrent' : 'entry'}" data-id="${it.id}">
         <span class="t">${st}–${en}</span>
         <span class="n"><span class="dot" style="background:${a.color}"></span><span class="nm">${esc(a.name)}${it.note ? `<span class="note">${esc(it.note)}</span>` : ''}</span></span>
@@ -511,8 +514,9 @@ function tick(){
   }
 }
 setInterval(tick, 1000);
-setInterval(render, 30000);
-document.addEventListener('visibilitychange', () => { if(!document.hidden){ render(); syncNow(); } });
+setInterval(checkStill, 15000);
+setInterval(() => { const a = document.activeElement; if(a && a.id === 'fLen') return; render(); }, 30000);
+document.addEventListener('visibilitychange', () => { if(!document.hidden){ render(); syncNow(); tick(); setTimeout(checkStill, 800); } });
 
 function toast(msg){
   const t = $('#toast'); t.textContent = msg; t.classList.add('show');
@@ -521,12 +525,15 @@ function toast(msg){
 function openSheet(html){ $('#sheet').innerHTML = html; $('#ov').classList.add('open'); const f = $('#sheet').querySelector('button,input,select,textarea'); if(f) f.focus(); }
 function closeSheet(){ $('#ov').classList.remove('open'); editing = null; }
 
-function endCurrent(){
+function endCurrent(endT){
   const c = S.current; if(!c) return null;
-  const end = Date.now(); S.current = null;
+  const end = endT || Date.now();
+  if(c.sprint) pushRun(c, Math.min(end, c.sprint), end >= c.sprint ? null : 'cut');
+  S.current = null;
   if(end - c.start < 60000){ toast('不到 1 分钟，这段没有记下'); return null; }
   const en = {id:uid(), act:c.act, start:c.start, end, focus:null, note:c.note||''};
   if(c.blocks) en.blocks = c.blocks;
+  if(c.runs && c.runs.length) en.runs = c.runs.filter(r => r.s < end);
   S.entries.push(en);
   return en;
 }
@@ -690,7 +697,7 @@ function saveCurrent(){
   const fs = $('#fStart').value; if(!fs) return;
   let start = at(sod(Date.now()), fs);
   if(start > Date.now()) start = at(addDays(sod(Date.now()), -1), fs);
-  S.current = {act:$('#fAct').value, start, note:$('#fNote').value.trim()};
+  S.current = {...S.current, act:$('#fAct').value, start, note:$('#fNote').value.trim()};
   save(); closeSheet(); render(); toast('已保存');
 }
 
@@ -735,7 +742,9 @@ function buildText(){
     const a = actById(it.act);
     let f = it.focus ? String(it.focus) + (it.reason ? `（${it.reason}）` : '') : (a.rate && !it.live ? '未评' : '-');
     const bl = it.live ? (S.current.blocks || 0) : (it.blocks || 0);
-    if(bl) f += ` | 5分钟块×${bl}`;
+    const sk = streaksOf(it);
+    if(it.runs && it.runs.length && sk.length) f += ` | 最长连续专注${Math.max(...sk)}分`;
+    else if(bl) f += ` | 5分钟块×${bl}`;
     lines.push(`${hm(it.start)}-${it.live ? '进行中' : hm(it.end)} | ${a.name}${it.note ? `（${it.note}）` : ''} | ${durTxt(it.end - it.start)} | ${f}`);
   });
   const tot = {}; let all = 0, high = 0;
@@ -743,6 +752,8 @@ function buildText(){
   lines.push('', '合计：');
   Object.entries(tot).sort((x,y) => y[1]-x[1]).forEach(([id,ms]) => lines.push(`${actById(id).name} ${durTxt(ms)}`));
   lines.push(`学习和工作 ${durTxt(all)}，高专注 ${durTxt(high)}`);
+  const FB = focusStats(view, 1);
+  if(FB) lines.push(`今天最长一次连续专注 ${FB.today} 分钟（专注计时 ${FB.count} 次）`);
   lines.push(...tbText(view));
   lines.push('', '今天最卡的地方：', '明天想完成的事：');
   return lines.join('\n');
@@ -811,7 +822,11 @@ document.addEventListener('click', e => {
     case 'tbClear': tbClear(); break;
     case 'tbDoClear': { const k = isoDate(view); S.tb = S.tb.filter(x => x.date !== k); save(); closeSheet(); renderTB(); break; }
     case 'sprint': sprintStart(); break;
-    case 'sprintStop': if(S.current){ S.current.sprint = null; save(); render(); } break;
+    case 'sprintStop': sprintQuit(); break;
+    case 'chk': answerCheck(id); break;
+    case 'useLen': setFocusLen(Number(id)); render(); toast('专注时长改成 ' + id + ' 分钟'); break;
+    case 'stillYes': if(S.current){ S.current.ck = Date.now(); save(); } closeSheet(); render(); toast('好，继续加油'); break;
+    case 'stillNo': stillNo(); break;
     case 'sprintAgain': closeSheet(); sprintStart(); break;
     case 'sprintRest': { closeSheet(); const r = S.activities.find(a => a.name === '休息' && !a.hidden); if(r) switchTo(r.id); break; }
     case 'cycleM': cycleM(id); break;
@@ -923,8 +938,11 @@ function insights(P){
     if(r > 1.15) out.push(`计划的实际用时是预计的 <b>${r.toFixed(1)} 倍</b>，安排时可以多留 ${Math.round((r - 1) * 100)}% 的时间。`);
     else if(r < 0.85) out.push(`计划实际只用了预计时间的 <b>${Math.round(r * 100)}%</b>，可能是没做完就停了，也可能预计得太多。`);
   }
-  const B = blockStats(sod(Date.now()), rangeN);
-  if(B) out.unshift(`用 5 分钟冲刺时，你平均连续完成 <b>${B.avg.toFixed(1)} 块</b>（约 ${Math.round(B.avg * 5)} 分钟），最长一次 ${B.max} 块。下次试着比平均多坚持一块。`);
+  const B = focusStats(sod(Date.now()), rangeN);
+  if(B){
+    const nxt = LENS.find(m => m > B.avg) || LENS[LENS.length - 1];
+    out.unshift(`你每天最长的一次连续专注，平均 <b>${Math.round(B.avg)} 分钟</b>，这段时间最长 ${B.max} 分钟。下一步目标：稳定做到 ${nxt} 分钟。`);
+  }
   return out;
 }
 
@@ -1009,10 +1027,24 @@ function renderDash(){
   const reasons = rs.length ? `<section><h2>分心原因 <small>专注度 1–2 分时记下的</small></h2>${rs.map(([r, n]) =>
     `<div class="reason"><span class="nm">${esc(r)}</span><span class="bar"><i style="width:${n / rmax * 100}%"></i></span><span>${n} 次</span></div>`).join('')}</section>` : '';
 
+  const B = focusStats(today, rangeN);
+  let focusSec = '';
+  if(B){
+    const mx = Math.max(30, ...B.days.map(x => x.best));
+    const fl = focusLen();
+    const fcols = B.days.map(x => `<div class="col" title="${dateTxt(x.d)} ${x.best} 分钟">${x.best ? `<i style="height:${x.best / mx * 100}%;background:var(--accent)"></i>` : ''}</div>`).join('');
+    const fxl = P.days.map((x, i) => { const d = new Date(x.d); const show = rangeN === 7 || i % (rangeN === 14 ? 2 : 5) === (rangeN - 1) % (rangeN === 14 ? 2 : 5); return `<span>${show ? (rangeN === 7 ? WK[d.getDay()] : d.getDate()) : ''}</span>`; }).join('');
+    focusSec = `<section><h2>最长连续专注 <small>每天最长的一次</small></h2>
+      <div class="stats" style="margin:0 0 8px"><div class="stat"><b>${B.today}<small style="font-size:12px;font-weight:400"> 分</small></b><span>今天</span></div>
+      <div class="stat"><b>${Math.round(B.avg)}<small style="font-size:12px;font-weight:400"> 分</small></b><span>日均最长</span></div>
+      <div class="stat"><b>${B.max}<small style="font-size:12px;font-weight:400"> 分</small></b><span>这段时间最长</span></div></div>
+      <div class="chart"><div class="plot" style="height:110px">${fl <= mx ? `<div class="gl" style="bottom:${fl / mx * 100}%"><span>${fl}</span></div>` : ''}<div class="cols">${fcols}</div></div><div class="xl">${fxl}</div>
+      <div class="readout">虚线是你现在设的专注时长（${fl} 分钟）。到点自评：全程专注 ${B.q.full} 次 · 拉回来 ${B.q.back} 次 · 走神 ${B.q.lost} 次 · 放弃 ${B.q.quit} 次</div></div></section>`;
+  }
   const ins = insights(P);
   const insHtml = `<section><h2>发现</h2><ul class="insights">${ins.length ? ins.map(t => `<li>${t}</li>`).join('') : '<li>多记几天、记得给学习打专注分，这里会自动找出你的规律。</li>'}</ul></section>`;
 
-  el.innerHTML = range + hero + dayChart + hourChart + where + reasons + insHtml +
+  el.innerHTML = range + hero + focusSec + dayChart + hourChart + where + reasons + insHtml +
     `<div class="actions"><button class="btn primary" data-action="copyPeriod">复制这段时间的复盘，发给 Claude</button></div>`;
 }
 
@@ -1031,8 +1063,12 @@ function periodText(){
   Object.entries(P.acts).sort((a, b) => b[1] - a[1]).forEach(([id, ms]) => L.push(`${actById(id).name} ${durTxt(ms / Math.max(1, P.logged))}`));
   const rs = Object.entries(P.reasons);
   if(rs.length){ L.push('', '分心原因：' + rs.sort((a, b) => b[1] - a[1]).map(([r, n]) => `${r} ${n}次`).join('，')); }
-  const B = blockStats(today, rangeN);
-  if(B) L.push('', `5 分钟冲刺：共 ${B.total} 块，平均每次连续 ${B.avg.toFixed(1)} 块，最长 ${B.max} 块`);
+  const B = focusStats(today, rangeN);
+  if(B){
+    L.push('', `专注计时：共 ${B.count} 次，专注 ${durTxt(B.total * 60000)}；每天最长连续专注平均 ${Math.round(B.avg)} 分钟，最长 ${B.max} 分钟`);
+    L.push(`到点自评：全程专注 ${B.q.full} 次，走神但拉回 ${B.q.back} 次，大部分走神 ${B.q.lost} 次，中途放弃 ${B.q.quit} 次`);
+    L.push('每天最长连续专注：' + B.days.map(x => `${new Date(x.d).getMonth() + 1}/${new Date(x.d).getDate()} ${x.best}分`).join('，'));
+  }
   L.push('', '这段时间我的感受：', '下周想改进的：');
   return L.join('\n');
 }
@@ -1205,8 +1241,15 @@ function handleUrl(){
 
 if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
-/* ============ 5 分钟冲刺 ============ */
-let audioCtx = null;
+/* ============ 专注计时（时长可调，练长时间专注） ============ */
+const LENS = [5,10,15,20,25,30,35,40,45,50,60,75,90,120];
+const STILL = 90;          // 分钟：学习类活动没在专注计时、又超过这么久没确认，就问一句「还在做吗」
+const GAP = 5 * 60000;     // 两次专注之间隔了超过 5 分钟，就不算连续
+const CHK = {full:'全程专注', back:'走神过，但拉回来了', lost:'大部分在走神'};
+let audioCtx = null, lastAsk = 0;
+
+function focusLen(){ let v = 25; try{ v = Number(localStorage.getItem('tt-flen')) || 25; }catch(e){} return LENS.includes(v) ? v : 25; }
+function setFocusLen(v){ try{ localStorage.setItem('tt-flen', String(v)); }catch(e){} }
 function beep(){
   try{
     if(!audioCtx) return;
@@ -1220,37 +1263,157 @@ function beep(){
   }catch(e){}
   try{ navigator.vibrate && navigator.vibrate([200, 100, 200]); }catch(e){}
 }
-function sprintRow(){
-  const c = S.current, n = c.blocks || 0;
-  const done = n ? `<span class="blocks" aria-label="已完成 ${n} 块">${'<i></i>'.repeat(Math.min(n, 24))}</span>${n > 24 ? ` ${n}` : ''}` : '';
-  if(c.sprint){
-    return `<div class="sprint"><span class="sp-t"><b id="spLeft">${clock(c.sprint - Date.now()).replace(/^0:/, '')}</b>这 5 分钟只做这一件事${done}</span>
-      <button class="link" data-action="sprintStop">放弃这块</button></div>`;
+// 一段记录里每一次「连续专注」有多少分钟。走神为主、主动放弃、中间停太久都会打断连续。
+function streaksOf(it){
+  const out = [];
+  if(it.blocks && !(it.runs && it.runs.length)) out.push(it.blocks * 5); // 旧版 5 分钟块
+  let acc = 0, prevE = 0;
+  (it.runs || []).forEach(r => {
+    if(acc && r.s - prevE > GAP){ out.push(acc); acc = 0; }
+    if(r.q === 'lost' || r.q === 'quit'){ if(acc) out.push(acc); acc = 0; }
+    else acc += r.m;
+    prevE = r.e;
+  });
+  if(acc) out.push(acc);
+  return out;
+}
+function curStreak(){
+  const c = S.current; if(!c || !c.runs || !c.runs.length) return 0;
+  const runs = c.runs, last = runs[runs.length - 1];
+  if(last.q === 'lost' || last.q === 'quit') return 0;
+  const next = c.sprint ? (c.spStart || Date.now()) : Date.now();
+  if(next - last.e > GAP) return 0;
+  let acc = 0;
+  for(let i = runs.length - 1; i >= 0; i--){
+    const r = runs[i];
+    if(r.q === 'lost' || r.q === 'quit') break;
+    if(i < runs.length - 1 && runs[i + 1].s - r.e > GAP) break;
+    acc += r.m;
   }
-  return `<div class="sprint"><span class="sp-t">${n ? `已完成 ${n} 块` : '坚持不了太久？只做 5 分钟'}${done}</span>
-    <button class="btn primary" data-action="sprint">开始 5 分钟冲刺</button></div>`;
+  return acc;
+}
+function allRuns(){
+  const out = [];
+  S.entries.forEach(x => (x.runs || []).forEach(r => out.push(r)));
+  if(S.current && S.current.runs) S.current.runs.forEach(r => out.push(r));
+  return out.sort((a, b) => a.e - b.e);
+}
+// 根据最近几次的表现，建议加一档或退一档
+function suggestLen(){
+  const len = focusLen(), i = LENS.indexOf(len);
+  const rec = allRuns().filter(r => r.len === len && r.q !== 'cut').slice(-3);
+  if(rec.length >= 3 && rec.every(r => r.q === 'full') && i < LENS.length - 1)
+    return {len: LENS[i + 1], txt: `最近 3 次 ${len} 分钟都全程专注，试试 ${LENS[i + 1]} 分钟？`};
+  const last2 = rec.slice(-2);
+  if(last2.length === 2 && last2.every(r => r.q === 'lost' || r.q === 'quit') && i > 0)
+    return {len: LENS[i - 1], txt: `${len} 分钟最近两次没撑住，先退回 ${LENS[i - 1]} 分钟，稳住再加。`};
+  return null;
+}
+function lenOptions(sel){ return LENS.map(m => `<option value="${m}"${m === sel ? ' selected' : ''}>${m} 分钟</option>`).join(''); }
+
+function sprintRow(){
+  const c = S.current, st = curStreak();
+  if(c.sprint){
+    const len = c.spLen || 5;
+    return `<div class="sprint"><span class="sp-t"><b id="spLeft">${clock(c.sprint - Date.now()).replace(/^0:/, '')}</b>这 ${len} 分钟只做这一件事${st ? `<br><small style="color:var(--muted)">已连续专注 ${st} 分钟</small>` : ''}</span>
+      <button class="link" data-action="sprintStop">放弃这一段</button></div>`;
+  }
+  const sg = suggestLen();
+  return `<div class="sprint"><label class="sp-t">专注计时 <select id="fLen" class="lensel" aria-label="专注时长">${lenOptions(focusLen())}</select></label>
+    <button class="btn primary" data-action="sprint">开始专注</button></div>
+    ${st ? `<p class="hint" style="margin:8px 0 0">已连续专注 <b>${st}</b> 分钟，接着来会继续累加。</p>` : ''}
+    ${sg ? `<p class="hint" style="margin:8px 0 0">${sg.txt} <button class="link" data-action="useLen" data-id="${sg.len}">改成 ${sg.len} 分钟</button></p>` : ''}`;
 }
 function sprintStart(){
   if(!S.current) return;
   try{ if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); if(audioCtx.state === 'suspended') audioCtx.resume(); }catch(e){}
-  S.current.sprint = Date.now() + 5 * 60000;
+  const len = focusLen();
+  S.current.spLen = len; S.current.spStart = Date.now();
+  S.current.sprint = Date.now() + len * 60000;
+  S.current.ck = Date.now();
   save(); render();
+}
+function pushRun(c, e, q){
+  const s = c.spStart || (c.sprint - (c.spLen || 5) * 60000);
+  const m = Math.round((e - s) / 60000);
+  c.sprint = null; c.spStart = null;
+  if(m < 1) return null;
+  if(!c.runs) c.runs = [];
+  const r = {s, e, m, len: c.spLen || 5, q};
+  c.runs.push(r); c.ck = e;
+  return r;
+}
+function sprintQuit(){
+  const c = S.current; if(!c || !c.sprint) return;
+  pushRun(c, Date.now(), 'quit'); save(); render();
+  toast('没关系，拉回来再开始就好');
 }
 function sprintDone(){
   const c = S.current; if(!c || !c.sprint) return;
-  c.sprint = null; c.blocks = (c.blocks || 0) + 1;
+  const r = pushRun(c, c.sprint, null);
   save(); render(); beep();
-  editing = {mode:'sprint'};
-  const n = c.blocks;
-  openSheet(`<h3>完成第 ${n} 块</h3><p class="sub">这一段已经连续专注 ${n * 5} 分钟。${n >= 3 ? '状态不错，' : ''}要再来 5 分钟吗？</p>
-    <div class="row"><button class="btn" data-action="sprintRest">休息一下</button><button class="btn primary" data-action="sprintAgain">再来 5 分钟</button></div>`);
+  if(!r) return;
+  editing = {mode:'check'};
+  openSheet(`<h3>${r.m} 分钟到了</h3><p class="sub">刚才这一段，专注得怎么样？</p>
+    <div class="reasons" style="grid-template-columns:1fr">${Object.entries(CHK).map(([k, t]) => `<button data-action="chk" data-id="${k}">${t}</button>`).join('')}</div>`);
 }
-function blockStats(endDay, n){
-  const s = addDays(endDay, -n + 1), e = addDays(endDay, 1);
-  const runs = S.entries.filter(x => x.blocks && x.start >= s && x.start < e).map(x => x.blocks);
-  if(S.current && S.current.blocks && S.current.start >= s) runs.push(S.current.blocks);
-  if(!runs.length) return null;
-  return {avg: runs.reduce((a, b) => a + b, 0) / runs.length, max: Math.max(...runs), total: runs.reduce((a, b) => a + b, 0), count: runs.length};
+function answerCheck(q){
+  const c = S.current; if(!c || !c.runs || !c.runs.length) { closeSheet(); return; }
+  c.runs[c.runs.length - 1].q = q; save(); render();
+  const st = curStreak(), len = focusLen();
+  editing = {mode:'sprint'};
+  const head = q === 'lost' ? '记下了。走神很正常，练的就是拉回来。' : `已连续专注 <b>${st}</b> 分钟。`;
+  openSheet(`<h3>接下来？</h3><p class="sub">${head}</p>
+    <div class="row"><button class="btn" data-action="sprintRest">休息一下</button><button class="btn primary" data-action="sprintAgain">再来 ${len} 分钟</button></div>`);
+}
+// 忘记结束：学习类活动超过 STILL 分钟没确认，就问一句
+function checkStill(){
+  const c = S.current;
+  if(!c || c.sprint || $('#ov').classList.contains('open') || Date.now() - lastAsk < 10 * 60000) return;
+  if(!actById(c.act).rate) return;
+  const since = c.ck || c.start;
+  if(Date.now() - since < STILL * 60000) return;
+  lastAsk = Date.now();
+  editing = {mode:'still'};
+  const def = Math.min(Date.now(), since + 60 * 60000);
+  openSheet(`<h3>「${esc(actById(c.act).name)}」已经计时 ${durTxt(Date.now() - c.start)}</h3>
+    <p class="sub">${hm(since)} 之后就没确认过。还在做吗？</p>
+    <div class="row" style="margin-top:12px"><button class="btn primary" data-action="stillYes">还在做</button></div>
+    <hr><p class="sub">早就停了？填一下大概几点停的，这段会按那个时间结束。</p>
+    <label class="field">大概几点停的<input id="fStop" type="time" value="${hm(def)}"></label>
+    <div class="row"><button class="btn" data-action="close">稍后再说</button><button class="btn primary" data-action="stillNo">按这个时间结束</button></div>`);
+}
+function stillNo(){
+  const c = S.current, v = $('#fStop').value; if(!c || !v) return;
+  let t = at(sod(Date.now()), v);
+  if(t > Date.now()) t = at(addDays(sod(Date.now()), -1), v);
+  if(t <= c.start + 60000){ toast('停止时间要晚于开始时间 ' + hm(c.start)); return; }
+  const en = endCurrent(t); save(); closeSheet(); render();
+  toast('已按 ' + hm(t) + ' 结束');
+  if(en && actById(en.act).rate) openRate(en.id);
+}
+// 统计：每天最长的一次连续专注
+function focusStats(endDay, n){
+  const days = [];
+  let total = 0, count = 0;
+  const q = {full:0, back:0, lost:0, quit:0};
+  for(let i = n - 1; i >= 0; i--){
+    const d = addDays(endDay, -i), e = addDays(d, 1);
+    let best = 0;
+    dayItems(d).forEach(it => {
+      if(it.start < d || it.start >= e) return;
+      streaksOf(it).forEach(m => { best = Math.max(best, m); });
+      (it.runs || []).forEach(r => { count++; if(r.q !== 'lost' && r.q !== 'quit') total += r.m; if(q[r.q] != null) q[r.q]++; });
+      if(it.blocks && !(it.runs && it.runs.length)){ count += it.blocks; total += it.blocks * 5; }
+    });
+    days.push({d, best});
+  }
+  const withAny = days.filter(x => x.best);
+  if(!withAny.length) return null;
+  return {days, total, count, q,
+    max: Math.max(...days.map(x => x.best)),
+    avg: withAny.reduce((s, x) => s + x.best, 0) / withAny.length,
+    today: days[days.length - 1].best};
 }
 
 /* ============ 5 分钟时间块 ============ */
@@ -1525,7 +1688,7 @@ async function copyTree(){
     const ta = $('#fText'); ta.focus(); ta.select();
   }
 }
-document.addEventListener('change', e => { if(e.target.id === 'fCourse'){ learnCourse = e.target.value; renderLearn(); } });
+document.addEventListener('change', e => { if(e.target.id === 'fLen'){ setFocusLen(Number(e.target.value)); render(); return; } if(e.target.id === 'fCourse'){ learnCourse = e.target.value; renderLearn(); } });
 
 render();
 handleUrl();
