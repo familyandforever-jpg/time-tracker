@@ -207,6 +207,8 @@ textarea{min-height:240px;font-size:14px;resize:vertical}
 .ntext.trunk{font-weight:700}
 .sprint{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
 .sprint .sp-t{font-size:15px}
+.banner{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--surface);border:1px solid var(--danger);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:14px}
+.banner .btn{flex:none;color:var(--danger);border-color:var(--danger)}
 .goal{font-size:15px;overflow-wrap:anywhere}
 .tbox{font-size:14px;color:var(--muted);margin-top:4px}
 .tbox.over{color:var(--danger);font-weight:700}
@@ -262,6 +264,7 @@ code.inline{font-size:13px;background:var(--bg);padding:1px 5px;border-radius:4p
     <button class="datebtn" data-action="next" aria-label="后一天" id="nextBtn">›</button>
   </header>
 
+  <div id="cleanTop"></div>
   <div class="now" id="now"></div>
 
   <section>
@@ -415,6 +418,7 @@ function render(){
   $('#nextBtn').disabled = view >= today;
 
   // now card
+  $('#cleanTop').innerHTML = view === today ? cleanBanner() : '';
   const nowEl = $('#now');
   if(S.current){
     const a = actById(S.current.act);
@@ -850,6 +854,8 @@ document.addEventListener('click', e => {
     case 'stillNo': stillNo(); break;
     case 'est': { document.querySelectorAll('.chips button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.id === id))); break; }
     case 'taskGo': taskGo(); break;
+    case 'clean': openClean(); break;
+    case 'doClean': doClean(); break;
     case 'taskDone': taskEnd(true); break;
     case 'taskMore': if(S.current){ S.current.estAsked = true; save(); } closeSheet(); render(); toast('最晚 ' + hm(S.current.cap) + ' 自动结束'); break;
     case 'taskStop': taskEnd(false); break;
@@ -982,7 +988,7 @@ function renderDash(){
     `<button data-action="range" data-id="${n}" aria-pressed="${n === rangeN}">近 ${n} 天</button>`).join('')}</div>`;
 
   if(!P.logged){
-    el.innerHTML = range + `<div class="hero"><div class="label">日均高专注学习</div><div class="big">0<small>小时/天</small></div>
+    el.innerHTML = cleanBanner() + range + `<div class="hero"><div class="label">日均高专注学习</div><div class="big">0<small>小时/天</small></div>
       <div class="meta">这段时间还没有记录。回到「记录」页点按钮开始计时，有一两天数据后这里就会出图。</div></div>`;
     return;
   }
@@ -1081,7 +1087,7 @@ function renderDash(){
   const ins = insights(P);
   const insHtml = `<section><h2>发现</h2><ul class="insights">${ins.length ? ins.map(t => `<li>${t}</li>`).join('') : '<li>多记几天、记得给学习打专注分，这里会自动找出你的规律。</li>'}</ul></section>`;
 
-  el.innerHTML = range + hero + taskSec + focusSec + dayChart + hourChart + where + reasons + insHtml +
+  el.innerHTML = cleanBanner() + range + hero + taskSec + focusSec + dayChart + hourChart + where + reasons + insHtml +
     `<div class="actions"><button class="btn primary" data-action="copyPeriod">复制这段时间的复盘，发给 Claude</button></div>`;
 }
 
@@ -1282,6 +1288,28 @@ function handleUrl(){
 }
 
 if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+
+/* ============ 清理忘记结束的超长记录 ============ */
+const LONG = 3 * 3600000; // 学习类单条超过 3 小时、又没设预计时间的，多半是忘了结束
+function longOnes(){ return S.entries.filter(e => actById(e.act).rate && !e.est && e.end - e.start >= LONG).sort((a, b) => a.start - b.start); }
+function cleanBanner(){
+  const L = longOnes(); if(!L.length) return '';
+  return `<div class="banner"><span>有 <b>${L.length}</b> 条学习记录超过 3 小时，多半是忘了结束，会把统计拉偏。</span><button class="btn" data-action="clean">清理</button></div>`;
+}
+function openClean(){
+  const L = longOnes(); if(!L.length){ toast('没有超长记录了'); return; }
+  editing = {mode:'clean'};
+  openSheet(`<h3>清理超长记录</h3><p class="sub">勾上的会删掉。真的学了这么久的，取消勾选就会保留。</p>
+    <ul class="list" style="margin-top:12px">${L.map(e => `<li><label class="check" style="padding:8px 12px;margin:0;border-bottom:1px solid var(--line)"><input type="checkbox" class="cl" value="${e.id}" checked>
+      <span>${dateTxt(e.start)} ${hm(e.start)}–${hm(e.end)} · ${esc(actById(e.act).name)} · <b>${durTxt(e.end - e.start)}</b></span></label></li>`).join('')}</ul>
+    <div class="row"><button class="btn" data-action="close">取消</button><button class="btn danger" data-action="doClean">删除勾选的</button></div>`);
+}
+function doClean(){
+  const ids = new Set([...document.querySelectorAll('.cl:checked')].map(x => x.value));
+  if(!ids.size){ closeSheet(); return; }
+  S.entries = S.entries.filter(e => !ids.has(e.id));
+  save(); closeSheet(); render(); toast(`已删除 ${ids.size} 条`);
+}
 
 /* ============ 时间盒：开始前预计，最多做到 2 倍 ============ */
 const TASK_ESTS = [15, 30, 45, 60, 90, 120];

@@ -1,5 +1,5 @@
 // 离线缓存：没网时也能打开 App 记录，联网后自动同步。
-const V = 'tt-v5';
+const V = 'tt-v6';
 const CORE = ['./', 'index.html', 'config.js', 'manifest.json', 'icon-192.png', 'apple-touch-icon.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(V).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
