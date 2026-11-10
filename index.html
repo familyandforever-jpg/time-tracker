@@ -802,8 +802,11 @@ async function copyText(){
 document.addEventListener('click', e => {
   if(e.target === $('#ov')){ closeSheet(); return; }
   const t = e.target.closest('[data-action]'); if(!t) return;
-  const id = t.dataset.id;
-  switch(t.dataset.action){
+  if(['act', 'taskGo', 'sprint'].includes(t.dataset.action)) askNotify();
+  runAction(t.dataset.action, t.dataset.id);
+});
+function runAction(action, id){
+  switch(action){
     case 'prev': view = addDays(view,-1); render(); break;
     case 'next': if(view < sod(Date.now())){ view = addDays(view,1); render(); } break;
     case 'toggleEdit': editMode = !editMode; render(); break;
@@ -872,7 +875,7 @@ document.addEventListener('click', e => {
     case 'logout': if(sb) sb.auth.signOut(); closeSheet(); break;
     case 'syncNow': closeSheet(); syncNow(); break;
   }
-});
+}
 document.addEventListener('click', e => {
   if(tab !== 'tb' || brush !== null) return;
   const b = e.target.closest('[data-slot]'); if(!b) return;
@@ -1284,6 +1287,8 @@ function handleUrl(){
     if(a){ if(!S.current || S.current.act !== a.id) switchTo(a.id); toast('已开始「' + name + '」'); }
     else toast('找不到活动「' + name + '」');
   }else if(q.has('stop') && S.current){ stop(); }
+  const na = q.get('nact'); // App 关着时点了通知上的按钮
+  if(NACTS.includes(na) && S.current) runAction(na);
   if(location.search) history.replaceState(null, '', location.pathname);
 }
 
@@ -1325,6 +1330,7 @@ function openTask(id){
     <label class="field">这次要做完什么<input id="fGoal" maxlength="40" placeholder="比如：做完 tutorial 第 3 题" value="${plan && plan.text ? esc(plan.text) : ''}"></label>
     <div class="field" style="margin-bottom:0">预计多久</div>
     <div class="chips" role="group" aria-label="预计时间">${chips.map(m => `<button data-action="est" data-id="${m}" aria-pressed="${m === est}">${durTxt(m * 60000)}</button>`).join('')}</div>
+    ${notifyHint()}
     <div class="row"><button class="btn" data-action="close">取消</button><button class="btn primary" data-action="taskGo">开始</button></div>`);
 }
 function taskGo(){
@@ -1354,6 +1360,9 @@ function taskTick(){
         <button data-action="taskDone">做完了，结束</button>
         <button data-action="taskMore">还差一点，继续（最晚 ${hm(c.cap)}）</button>
         <button data-action="taskStop">没做完，先停下</button></div>`);
+    notify(`「${actById(c.act).name}」预计的 ${durTxt(c.est * 60000)} 到了`,
+      `${c.goal ? '「' + c.goal + '」' : '这件事'}做完了吗？不管的话最晚 ${hm(c.cap)} 自动结束。`, 'tt-due',
+      [{action: 'taskDone', title: '做完了，结束'}, {action: 'taskMore', title: '还在做，继续'}]);
   }
 }
 function taskEnd(done){
@@ -1372,6 +1381,7 @@ function taskCap(){
   c.capped = true; if(c.done == null) c.done = false;
   const en = endCurrent(c.cap); save(); render(); beep();
   if(!en) return;
+  notify(`「${actById(en.act).name}」已在 ${hm(en.end)} 自动结束`, '到了预计时间的 2 倍。还在做的话，打开 App 重新开始一段。', 'tt-due');
   editing = {mode:'rate', id: en.id};
   openSheet(`<h3>已在 ${hm(en.end)} 自动结束</h3>
     <p class="sub">「${esc(actById(en.act).name)}」预计 ${durTxt(en.est * 60000)}，到 2 倍上限就停了。如果之后其实还在做，可以「补记一条」。</p>
@@ -1401,6 +1411,7 @@ function taskStats(endDay, n){
 /* ============ 专注计时（时长可调，练长时间专注） ============ */
 const LENS = [5,10,15,20,25,30,35,40,45,50,60,75,90,120];
 const STILL = 90;          // 分钟：学习类活动没在专注计时、又超过这么久没确认，就问一句「还在做吗」
+const STILL_ANY = 120;     // 分钟：其他活动（睡觉除外）超过这么久没确认，也问一句
 const GAP = 5 * 60000;     // 两次专注之间隔了超过 5 分钟，就不算连续
 const CHK = {full:'全程专注', back:'走神过，但拉回来了', lost:'大部分在走神'};
 let audioCtx = null, lastAsk = 0;
@@ -1510,6 +1521,7 @@ function sprintDone(){
   const r = pushRun(c, c.sprint, null);
   save(); render(); beep();
   if(!r) return;
+  notify(`专注 ${r.m} 分钟到了`, '回到 App 记一下这段专注得怎么样。', 'tt-sprint');
   editing = {mode:'check'};
   openSheet(`<h3>${r.m} 分钟到了</h3><p class="sub">刚才这一段，专注得怎么样？</p>
     <div class="reasons" style="grid-template-columns:1fr">${Object.entries(CHK).map(([k, t]) => `<button data-action="chk" data-id="${k}">${t}</button>`).join('')}</div>`);
@@ -1527,9 +1539,10 @@ function answerCheck(q){
 function checkStill(){
   const c = S.current;
   if(!c || c.est || c.sprint || $('#ov').classList.contains('open') || Date.now() - lastAsk < 10 * 60000) return;
-  if(!actById(c.act).rate) return;
+  const a = actById(c.act);
+  if(a.name === '睡觉') return;
   const since = c.ck || c.start;
-  if(Date.now() - since < STILL * 60000) return;
+  if(Date.now() - since < (a.rate ? STILL : STILL_ANY) * 60000) return;
   lastAsk = Date.now();
   editing = {mode:'still'};
   const def = Math.min(Date.now(), since + 60 * 60000);
@@ -1539,7 +1552,38 @@ function checkStill(){
     <hr><p class="sub">早就停了？填一下大概几点停的，这段会按那个时间结束。</p>
     <label class="field">大概几点停的<input id="fStop" type="time" value="${hm(def)}"></label>
     <div class="row"><button class="btn" data-action="close">稍后再说</button><button class="btn primary" data-action="stillNo">按这个时间结束</button></div>`);
+  notify(`还在做「${a.name}」吗？`, `已经计时 ${durTxt(Date.now() - c.start)}，${hm(since)} 之后没确认过。早就停了的话，点开填一下几点停的。`, 'tt-still',
+    [{action: 'stillYes', title: '还在做'}, {action: 'open', title: '早就停了'}]);
 }
+
+/* ============ 系统通知：在 VS Code、浏览器别的标签里也能看到提醒 ============ */
+const NACTS = ['taskDone', 'taskMore', 'stillYes'];
+// 点活动 / 开始时调用（必须在点击里）：顺便打开提示音，第一次会问要不要允许通知
+function askNotify(){
+  try{ if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); if(audioCtx.state === 'suspended') audioCtx.resume(); }catch(e){}
+  if(!('Notification' in window) || Notification.permission !== 'default') return;
+  Notification.requestPermission().then(p => { if(p === 'granted') toast('好了：到点会在屏幕角落弹提醒'); }).catch(() => {});
+}
+async function notify(title, body, tag, actions){
+  if(!('Notification' in window) || Notification.permission !== 'granted') return;
+  if(document.hasFocus()) return; // 正在看 App，页面里的弹窗就够了
+  const opt = {body, tag, renotify: true, requireInteraction: true, icon: 'icon-192.png', badge: 'icon-192.png'};
+  try{
+    const reg = 'serviceWorker' in navigator && await navigator.serviceWorker.getRegistration();
+    if(reg){ await reg.showNotification(title, {...opt, actions: actions || []}); return; }
+  }catch(e){}
+  try{ const n = new Notification(title, opt); n.onclick = () => { window.focus(); n.close(); }; }catch(e){}
+}
+function notifyHint(){
+  if(!('Notification' in window)) return '';
+  if(Notification.permission === 'denied') return '<p class="hint">提醒通知被浏览器拦截了：点地址栏左边的图标 → 通知 → 允许，在别的软件里才看得到到点提醒。</p>';
+  if(Notification.permission === 'default') return '<p class="hint">点「开始」后浏览器会问能不能发通知，选允许，你在写代码时也能看到到点提醒。</p>';
+  return '';
+}
+if('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => {
+  const a = e.data && e.data.tt;
+  if(NACTS.includes(a) && S.current) runAction(a);
+});
 function stillNo(){
   const c = S.current, v = $('#fStop').value; if(!c || !v) return;
   let t = at(sod(Date.now()), v);
